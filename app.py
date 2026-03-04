@@ -1,6 +1,10 @@
 import streamlit as st
 
-st.title("Hello from streamlit")
-st.write("If you can see this your deploy worked")
+st.title("My First Deployed App")
 
-st.write("lets see if I can make a change")
+st.write("This app is running from GitHub and Streamlit Cloud.")
+
+name = st.text_input("Enter your name")
+
+if name:
+    st.write(f"Hello {name}, welcome to my app.")
