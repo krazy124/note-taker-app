@@ -9,4 +9,4 @@ if name:
 
 bigTupple = [("a","b"),("y","z"),(1,2)]
 
-st.write("the letter or number is: " + bigTupple[1][1])
+st.write("the letter or number is: " + bigTupple[1][0])
