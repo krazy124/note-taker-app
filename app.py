@@ -10,4 +10,4 @@ if name:
 bigTupple = [("a","b"),("y","z"),(1,2)]
 
 st.write("the letter or number is:" + bigTupple[1][0])
-sr.write(bag > Bag)
+st.write(bag > Bag)
