@@ -1,10 +1,18 @@
-import textwrap
+import io
+import contextlib
+import traceback
+
 import streamlit as st
 from streamlit_ace import st_ace
 
+st.set_page_config(page_title="Python Notes Code Editor", layout="wide")
 
-INDENT = "    "  # 4 spaces is the standard Python indent
-DEFAULT_CODE = '''food_temp = 125
+st.title("Python Notes Code Editor")
+
+st.write("Write Python code, run it, and view the output below.")
+
+if "code" not in st.session_state:
+    st.session_state.code = """food_temp = 125
 
 if food_temp > 140:
     print("too hot to eat")
@@ -12,135 +20,69 @@ elif food_temp > 130:
     print("hot but safe to eat")
 elif food_temp > 120:
     print("ideal eating temperature")
-elif food_temp > 110:
-    print("very warm and easy to eat")
-elif food_temp > 100:
-    print("food is warm but almost too cool")
 else:
     print("food is cold")
-'''
+"""
 
+if "console_output" not in st.session_state:
+    st.session_state.console_output = ""
 
-def normalize_python_indentation(code: str) -> str:
-    """Convert tabs to 4 spaces and trim trailing whitespace.
+if "console_error" not in st.session_state:
+    st.session_state.console_error = ""
 
-    This does not try to fully auto-fix Python syntax. It just cleans up
-    indentation so code is easier to reuse in editors or spreadsheets.
-    """
-    lines = code.replace("\r\n", "\n").replace("\r", "\n").split("\n")
-    cleaned = []
-    for line in lines:
-        line = line.replace("\t", INDENT).rstrip()
-        cleaned.append(line)
-    return "\n".join(cleaned).strip("\n")
+code = st_ace(
+    value=st.session_state.code,
+    language="python",
+    theme="monokai",
+    key="code_editor",
+    height=400,
+    font_size=14,
+    tab_size=4,
+    show_gutter=True,
+    wrap=True,
+    auto_update=True,
+)
 
+st.session_state.code = code
 
-def wrap_notes(text: str, width: int = 60) -> str:
-    """Wrap long note text for easier spreadsheet reading."""
-    paragraphs = [p.strip() for p in text.replace("\r\n", "\n").split("\n")]
-    wrapped = []
-    for p in paragraphs:
-        if not p:
-            wrapped.append("")
-        else:
-            wrapped.append(textwrap.fill(p, width=width))
-    return "\n".join(wrapped)
+col1, col2, col3 = st.columns(3)
 
+with col1:
+    if st.button("Run Code"):
+        stdout_buffer = io.StringIO()
 
-st.set_page_config(page_title="Python Notes Code Editor", layout="wide")
-st.title("Python Notes Code Editor")
-st.caption("A mini Streamlit editor for Python study notes.")
+        try:
+            with contextlib.redirect_stdout(stdout_buffer):
+                exec(code, {})
+            st.session_state.console_output = stdout_buffer.getvalue()
+            st.session_state.console_error = ""
+        except Exception:
+            st.session_state.console_output = stdout_buffer.getvalue()
+            st.session_state.console_error = traceback.format_exc()
 
-if "code_value" not in st.session_state:
-    st.session_state.code_value = DEFAULT_CODE
-if "notes_value" not in st.session_state:
-    st.session_state.notes_value = "Python checks conditions from top to bottom. The first true condition runs, and the rest are skipped."
+with col2:
+    if st.button("Clear Console"):
+        st.session_state.console_output = ""
+        st.session_state.console_error = ""
 
-left, right = st.columns([3, 2])
-
-with left:
-    st.subheader("Code editor")
-    st.write("Type Python below. Ace handles editor behavior like indentation and tab support better than a plain text area.")
-
-    code_value = st_ace(
-        value=st.session_state.code_value,
-        language="python",
-        theme="github",
-        key="python_editor",
-        min_lines=18,
-        max_lines=30,
-        font_size=15,
-        tab_size=4,
-        show_gutter=True,
-        wrap=True,
-        auto_update=True,
-    )
-
-    if code_value is None:
-        code_value = st.session_state.code_value
-    else:
-        st.session_state.code_value = code_value
-
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        if st.button("Normalize indentation", use_container_width=True):
-            st.session_state.code_value = normalize_python_indentation(st.session_state.code_value)
-            st.rerun()
-    with c2:
-        if st.button("Load sample", use_container_width=True):
-            st.session_state.code_value = DEFAULT_CODE
-            st.rerun()
-    with c3:
-        st.download_button(
-            "Download .py",
-            data=st.session_state.code_value,
-            file_name="python_example.py",
-            mime="text/x-python",
-            use_container_width=True,
-        )
-
-    st.subheader("Saved code preview")
-    st.code(st.session_state.code_value, language="python")
-
-with right:
-    st.subheader("Notes formatter")
-    notes_input = st.text_area(
-        "Explanation / notes",
-        value=st.session_state.notes_value,
-        height=180,
-        help="This box is for readable notes, not runnable code.",
-    )
-    st.session_state.notes_value = notes_input
-
-    wrap_width = st.slider("Wrap width", min_value=35, max_value=100, value=60)
-    wrapped_notes = wrap_notes(st.session_state.notes_value, wrap_width)
-
-    st.subheader("Spreadsheet-friendly notes")
-    st.text_area(
-        "Wrapped output",
-        value=wrapped_notes,
-        height=180,
-        disabled=True,
-    )
-
+with col3:
     st.download_button(
-        "Download notes.txt",
-        data=wrapped_notes,
-        file_name="wrapped_notes.txt",
-        mime="text/plain",
-        use_container_width=True,
+        label="Download Code",
+        data=code,
+        file_name="example.py",
+        mime="text/plain"
     )
 
-st.divider()
+st.subheader("Console")
 
-with st.expander("How to run this app"):
-    st.markdown(
-        """
-        1. Create a virtual environment.
-        2. Install the requirements.
-        3. Run `streamlit run app.py`.
+if st.session_state.console_output:
+    st.code(st.session_state.console_output, language="text")
+else:
+    st.code("", language="text")
 
-        This app uses the `streamlit-ace` component for the code editor.
-        """
-    )
+if st.session_state.console_error:
+    st.subheader("Errors")
+    st.code(st.session_state.console_error, language="text")
 
+st.subheader("Notes")
+notes = st.text_area("Explanation / Notes", height=150)
