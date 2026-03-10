@@ -1,6 +1,7 @@
 import io
 import contextlib
 import traceback
+import textwrap
 
 import streamlit as st
 from streamlit_ace import st_ace
@@ -27,13 +28,31 @@ def connect_to_sheet():
 
     client = gspread.authorize(creds)
 
-    # Your spreadsheet ID from the link you shared
     sheet = client.open_by_key("14pnlZ5jfXNC-AGrSsRQAmUQ17Acbn5xxDZQMsAlJQlo")
-
-    # Uses the first tab in the spreadsheet
     worksheet = sheet.sheet1
 
     return worksheet
+
+
+# =========================
+# Text Formatting Helpers
+# =========================
+def wrap_text_for_sheet(text, width):
+    if not text or not text.strip():
+        return ""
+
+    paragraphs = text.splitlines()
+    wrapped_paragraphs = []
+
+    for paragraph in paragraphs:
+        if not paragraph.strip():
+            wrapped_paragraphs.append("")
+        else:
+            wrapped_paragraphs.append(
+                textwrap.fill(paragraph.strip(), width=width)
+            )
+
+    return "\n".join(wrapped_paragraphs)
 
 
 # =========================
@@ -71,17 +90,20 @@ def run_code():
         st.session_state.console_error = traceback.format_exc()
 
 
-def save_to_google_sheets(category, concept, code_example, output_text, explanation, notes):
+def save_to_google_sheets(category, concept, code_example, output_text, explanation, notes, wrap_width):
     try:
         worksheet = connect_to_sheet()
+
+        wrapped_explanation = wrap_text_for_sheet(explanation, wrap_width)
+        wrapped_notes = wrap_text_for_sheet(notes, wrap_width)
 
         new_row = [
             category,
             concept,
             code_example,
             output_text,
-            explanation,
-            notes
+            wrapped_explanation,
+            wrapped_notes
         ]
 
         worksheet.append_row(new_row)
@@ -174,6 +196,14 @@ output_text = st.text_area(
     height=120
 )
 
+wrap_width = st.number_input(
+    "Characters before line break for Explanation and Notes",
+    min_value=20,
+    max_value=200,
+    value=60,
+    step=5
+)
+
 explanation = st.text_area(
     "Explanation",
     height=160
@@ -196,6 +226,7 @@ if st.button("Save to Google Sheets"):
         output_text=output_text,
         explanation=explanation,
         notes=notes,
+        wrap_width=wrap_width,
     )
 
     if success:
