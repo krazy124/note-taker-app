@@ -60,7 +60,7 @@ with col2:
 
 with col3:
     if st.button("Clear Editor"):
-        st.session_state.code = ""
+        st.session_state.code_editor = ""
         st.rerun()
 
 with col4:
