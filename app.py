@@ -11,18 +11,9 @@ st.title("Python Notes Code Editor")
 
 st.write("Write Python code, run it, and view the output below.")
 
+# Initialize session state
 if "code" not in st.session_state:
-    st.session_state.code = """food_temp = 125
-
-if food_temp > 140:
-    print("too hot to eat")
-elif food_temp > 130:
-    print("hot but safe to eat")
-elif food_temp > 120:
-    print("ideal eating temperature")
-else:
-    print("food is cold")
-"""
+    st.session_state.code = ""
 
 if "console_output" not in st.session_state:
     st.session_state.console_output = ""
@@ -30,6 +21,7 @@ if "console_output" not in st.session_state:
 if "console_error" not in st.session_state:
     st.session_state.console_error = ""
 
+# Code editor
 code = st_ace(
     value=st.session_state.code,
     language="python",
@@ -45,7 +37,8 @@ code = st_ace(
 
 st.session_state.code = code
 
-col1, col2, col3 = st.columns(3)
+# Buttons
+col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     if st.button("Run Code"):
@@ -66,6 +59,11 @@ with col2:
         st.session_state.console_error = ""
 
 with col3:
+    if st.button("Clear Editor"):
+        st.session_state.code = ""
+        st.rerun()
+
+with col4:
     st.download_button(
         label="Download Code",
         data=code,
@@ -73,6 +71,7 @@ with col3:
         mime="text/plain"
     )
 
+# Console output
 st.subheader("Console")
 
 if st.session_state.console_output:
@@ -84,5 +83,6 @@ if st.session_state.console_error:
     st.subheader("Errors")
     st.code(st.session_state.console_error, language="text")
 
+# Notes
 st.subheader("Notes")
 notes = st.text_area("Explanation / Notes", height=150)
