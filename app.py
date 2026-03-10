@@ -200,7 +200,7 @@ wrap_width = st.number_input(
     "Characters before line break for Explanation and Notes",
     min_value=20,
     max_value=200,
-    value=60,
+    value=70,
     step=5
 )
 
