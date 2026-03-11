@@ -11,6 +11,24 @@ from google.oauth2.service_account import Credentials
 
 st.set_page_config(page_title="Python Notes Code Editor", layout="wide")
 
+st.markdown(
+    """
+    <style>
+    .block-container {
+        padding-top: 1rem;
+        padding-bottom: 0rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+
+    div[data-testid="stVerticalBlock"] {
+        gap: 0.5rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 
 # =========================
 # Google Sheets Connection
@@ -143,8 +161,8 @@ editor_value = st_ace(
     language="python",
     theme="monokai",
     key="ace_editor",
-    height=400,
-    font_size=14,
+    height=650,
+    font_size=16,
     tab_size=4,
     show_gutter=True,
     wrap=True,
@@ -200,7 +218,7 @@ wrap_width = st.number_input(
     "Characters before line break for Explanation and Notes",
     min_value=20,
     max_value=200,
-    value=70,
+    value=60,
     step=5
 )
 
