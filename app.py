@@ -15,14 +15,45 @@ st.markdown(
     """
     <style>
     .block-container {
-        padding-top: 1rem;
+        padding-top: 0.4rem;
         padding-bottom: 0rem;
-        padding-left: 1rem;
-        padding-right: 1rem;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+        max-width: 100%;
     }
 
     div[data-testid="stVerticalBlock"] {
-        gap: 0.5rem;
+        gap: 0.35rem;
+    }
+
+    h1 {
+        font-size: 1.8rem !important;
+        margin-bottom: 0.2rem !important;
+    }
+
+    h2, h3 {
+        margin-top: 0.35rem !important;
+        margin-bottom: 0.2rem !important;
+    }
+
+    p {
+        margin-bottom: 0.2rem !important;
+    }
+
+    @media (max-width: 768px) {
+        .block-container {
+            padding-top: 0.2rem;
+            padding-left: 0.35rem;
+            padding-right: 0.35rem;
+        }
+
+        h1 {
+            font-size: 1.4rem !important;
+        }
+
+        h2, h3 {
+            font-size: 1.15rem !important;
+        }
     }
     </style>
     """,
@@ -133,8 +164,7 @@ def save_to_google_sheets(category, concept, code_example, output_text, explanat
 # =========================
 # App UI
 # =========================
-st.title("Python Notes Code Editor")
-st.write("Write Python code, run it, and save your notes to Google Sheets.")
+st.title("Python Notes Editor")
 
 
 # =========================
@@ -142,13 +172,8 @@ st.write("Write Python code, run it, and save your notes to Google Sheets.")
 # =========================
 st.subheader("Note Entry")
 
-col_a, col_b = st.columns(2)
-
-with col_a:
-    category = st.text_input("Category")
-
-with col_b:
-    concept = st.text_input("Concept")
+category = st.text_input("Category")
+concept = st.text_input("Concept")
 
 
 # =========================
@@ -161,8 +186,8 @@ editor_value = st_ace(
     language="python",
     theme="monokai",
     key="ace_editor",
-    height=650,
-    font_size=16,
+    height=420,
+    font_size=15,
     tab_size=4,
     show_gutter=True,
     wrap=True,
@@ -178,17 +203,18 @@ st.session_state.editor_text = editor_value if editor_value is not None else ""
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.button("Run Code", on_click=run_code)
+    st.button("Run Code", on_click=run_code, use_container_width=True)
 
 with col2:
-    st.button("Clear Console", on_click=clear_console)
+    st.button("Clear Console", on_click=clear_console, use_container_width=True)
 
 with col3:
     st.download_button(
         label="Download Code",
         data=st.session_state.editor_text,
         file_name="example.py",
-        mime="text/plain"
+        mime="text/plain",
+        use_container_width=True
     )
 
 
@@ -211,7 +237,7 @@ st.subheader("Additional Fields")
 output_text = st.text_area(
     "Output / Result",
     value=st.session_state.console_output,
-    height=120
+    height=100
 )
 
 wrap_width = st.number_input(
@@ -224,19 +250,19 @@ wrap_width = st.number_input(
 
 explanation = st.text_area(
     "Explanation",
-    height=160
+    height=140
 )
 
 notes = st.text_area(
     "Notes",
-    height=160
+    height=140
 )
 
 
 # =========================
 # Save to Google Sheets
 # =========================
-if st.button("Save to Google Sheets"):
+if st.button("Save to Google Sheets", use_container_width=True):
     success, message = save_to_google_sheets(
         category=category,
         concept=concept,
