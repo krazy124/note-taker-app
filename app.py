@@ -1,5 +1,6 @@
 import io
 import csv
+import json
 import contextlib
 
 import streamlit as st
@@ -457,32 +458,53 @@ with tab2:
             st.session_state.separated_text = rows_to_tsv(separated_rows)
 
     with col2:
-        copy_safe_text = (
-            st.session_state.separated_text
-            .replace("\\", "\\\\")
-            .replace("`", "\\`")
-            .replace("$", "\\$")
-        )
-
         st.components.v1.html(
             f"""
-            <button
-                onclick="navigator.clipboard.writeText(`{copy_safe_text}`)"
-                style="
-                    width: 100%;
-                    padding: 0.6rem 1rem;
-                    margin-top: 0.1rem;
-                    border: 1px solid #999;
-                    border-radius: 0.5rem;
-                    background: white;
-                    cursor: pointer;
-                    font-size: 1rem;
-                "
-            >
-                Copy Separated
-            </button>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+                <button
+                    id="copy-btn"
+                    style="
+                        width: 100%;
+                        padding: 0.6rem 1rem;
+                        border: 1px solid #666;
+                        border-radius: 0.5rem;
+                        background: #f5f5f5;
+                        cursor: pointer;
+                        font-size: 1rem;
+                    "
+                >
+                    Copy Separated
+                </button>
+
+                <div id="copy-status" style="font-size:0.9rem; color:#4CAF50;"></div>
+            </div>
+
+            <script>
+            const textToCopy = {json.dumps(st.session_state.separated_text)};
+
+            document.getElementById("copy-btn").addEventListener("click", async function() {{
+                const status = document.getElementById("copy-status");
+
+                try {{
+                    await navigator.clipboard.writeText(textToCopy);
+                    status.innerText = "Copied!";
+                }} catch (err) {{
+                    try {{
+                        const temp = document.createElement("textarea");
+                        temp.value = textToCopy;
+                        document.body.appendChild(temp);
+                        temp.select();
+                        document.execCommand("copy");
+                        document.body.removeChild(temp);
+                        status.innerText = "Copied!";
+                    }} catch (err2) {{
+                        status.innerText = "Copy failed";
+                    }}
+                }}
+            }});
+            </script>
             """,
-            height=50,
+            height=80,
         )
 
     st.text_area(
