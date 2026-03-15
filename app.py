@@ -179,7 +179,11 @@ concept = st.text_input("Concept")
 # =========================
 # Example Forms
 # =========================
+st.subheader("Example Entries")
 
+for i, ex in enumerate(st.session_state.examples):
+
+    st.markdown(f"### Example {i+1}")
 
     ex["setup"] = st.text_area(
         "Setup",
