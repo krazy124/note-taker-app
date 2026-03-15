@@ -14,8 +14,7 @@ st.set_page_config(page_title="Python Review Block Builder", layout="wide")
 # =========================
 # Google Sheets Connection
 # =========================
-def connect_to_sheet():
-
+def connect_to_spreadsheet():
     scope = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
@@ -27,25 +26,31 @@ def connect_to_sheet():
     )
 
     client = gspread.authorize(creds)
+    spreadsheet = client.open_by_key("14pnlZ5jfXNC-AGrSsRQAmUQ17Acbn5xxDZQMsAlJQlo")
+    return spreadsheet
 
-    sheet = client.open_by_key("14pnlZ5jfXNC-AGrSsRQAmUQ17Acbn5xxDZQMsAlJQlo")
-    worksheet = sheet.worksheet("New Review")
 
-    return worksheet
+def connect_to_review_sheet():
+    spreadsheet = connect_to_spreadsheet()
+    return spreadsheet.worksheet("New Review")
+
+
+def connect_to_example_sheet():
+    spreadsheet = connect_to_spreadsheet()
+    return spreadsheet.worksheet("Example View")
 
 
 # =========================
 # Section ID Generator
 # =========================
 def get_next_section_id():
-
-    worksheet = connect_to_sheet()
+    worksheet = connect_to_review_sheet()
     values = worksheet.col_values(1)
 
     if len(values) <= 1:
         return "s1"
 
-    data_rows = values[1:]  # skip header
+    data_rows = values[1:]
 
     for value in reversed(data_rows):
         cleaned = str(value).strip().lower()
@@ -57,9 +62,8 @@ def get_next_section_id():
     return "s1"
 
 
-
 # =========================
-# Example State
+# Session State
 # =========================
 if "examples" not in st.session_state:
     st.session_state.examples = [
@@ -71,16 +75,17 @@ if "examples" not in st.session_state:
         }
     ]
 
-
 if "compiled_block" not in st.session_state:
     st.session_state.compiled_block = ""
+
+if "example_rows" not in st.session_state:
+    st.session_state.example_rows = []
 
 
 # =========================
 # Add Example
 # =========================
 def add_example():
-
     st.session_state.examples.append(
         {
             "setup": "",
@@ -95,34 +100,34 @@ def add_example():
 # Compile Block
 # =========================
 def compile_block(section_name, concept):
-
     block = ""
     active_setup = ""
-    runtime_env = {}   # shared environment across examples
+    runtime_env = {}
+    example_rows = []
 
     for ex in st.session_state.examples:
-
         stdout_buffer = io.StringIO()
+        result = ""
 
-        # update setup if new one is provided
         if ex["setup"]:
             active_setup = ex["setup"]
-
             block += "# Setup:\n"
             block += active_setup + "\n\n"
 
-            # run setup once to initialize environment
-            exec(active_setup, runtime_env)
+            try:
+                exec(active_setup, runtime_env)
+            except Exception:
+                result = traceback.format_exc()
 
-        try:
+        if not result:
+            try:
+                with contextlib.redirect_stdout(stdout_buffer):
+                    exec(ex["code"], runtime_env)
 
-            with contextlib.redirect_stdout(stdout_buffer):
-                exec(ex["code"], runtime_env)
+                result = stdout_buffer.getvalue().strip()
 
-            result = stdout_buffer.getvalue().strip()
-
-        except Exception:
-            result = traceback.format_exc()
+            except Exception:
+                result = traceback.format_exc().strip()
 
         if ex["instruction"]:
             block += f"# Instruction: {ex['instruction']}\n"
@@ -133,32 +138,49 @@ def compile_block(section_name, concept):
         block += ex["code"] + "\n"
 
         if result:
-            block += f"# Result: {result}\n"
+            single_line_result = result.replace("\n", " | ")
+            block += f"# Result: {single_line_result}\n"
 
         block += "\n"
 
+        code_for_example_view = ""
+        if active_setup:
+            code_for_example_view += active_setup + "\n\n"
+        code_for_example_view += ex["code"]
+
+        example_rows.append([
+            section_name,
+            concept,
+            ex["instruction"],
+            code_for_example_view.strip(),
+            result,
+            ex["notes"]
+        ])
+
     st.session_state.compiled_block = block
-
-
+    st.session_state.example_rows = example_rows
 
 
 # =========================
-# Save Block
+# Save Block + Examples
 # =========================
-def save_block(section_name, concept):
-
-    worksheet = connect_to_sheet()
+def save_block_and_examples(section_name, concept):
+    review_sheet = connect_to_review_sheet()
+    example_sheet = connect_to_example_sheet()
 
     section_id = get_next_section_id()
 
-    new_row = [
+    review_row = [
         section_id,
         section_name,
         concept,
         st.session_state.compiled_block
     ]
 
-    worksheet.append_row(new_row)
+    review_sheet.append_row(review_row)
+
+    if st.session_state.example_rows:
+        example_sheet.append_rows(st.session_state.example_rows)
 
     return section_id
 
@@ -168,22 +190,11 @@ def save_block(section_name, concept):
 # =========================
 st.title("Python Review Block Builder")
 
-
-# =========================
-# Section Fields
-# =========================
 st.subheader("Section Information")
-
 section_name = st.text_input("Section Name")
-
 concept = st.text_input("Concept")
 
-
-# =========================
-# Example Forms
-# =========================
 for i in range(len(st.session_state.examples)):
-
     ex = st.session_state.examples[i]
 
     st.markdown(f"### Example {i+1}")
@@ -216,38 +227,21 @@ for i in range(len(st.session_state.examples)):
 
     ex["code"] = code_value if code_value else ""
 
-
 st.button("Insert Another Example", on_click=add_example)
 
-
-# =========================
-# Compile Button
-# =========================
 st.button(
     "Compile Block",
     on_click=lambda: compile_block(section_name, concept)
 )
 
-
-# =========================
-# Preview
-# =========================
 st.subheader("Compiled Block Preview")
-
 st.code(st.session_state.compiled_block, language="python")
 
-
-# =========================
-# Save
-# =========================
 if st.button("Save to Google Sheets", use_container_width=True):
-
     compile_block(section_name, concept)
 
     if not section_name:
         st.error("Section Name required")
     else:
-
-        section_id = save_block(section_name, concept)
-
+        section_id = save_block_and_examples(section_name, concept)
         st.success(f"Saved as {section_id}")
