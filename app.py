@@ -133,16 +133,6 @@ def compile_block(section_name, concept):
 except Exception as e:
     result = f"Error: {e}"
 
-
-
-
-
-
-
-
-
-        
-
         if ex["instruction"]:
             block += f"# Instruction: {ex['instruction']}\n"
 
