@@ -85,6 +85,9 @@ if "example_rows" not in st.session_state:
 if "separated_text" not in st.session_state:
     st.session_state.separated_text = ""
 
+if "copy_trigger" not in st.session_state:
+    st.session_state.copy_trigger = False
+
 
 # =========================
 # Add Example
@@ -444,7 +447,7 @@ with tab2:
         key="block_content_input"
     )
 
-    col1, col2 = st.columns(2)
+    col1, spacer, col2 = st.columns([1, 0.25, 1])
 
     with col1:
         if st.button("Separate", key="separate_button"):
@@ -458,57 +461,25 @@ with tab2:
             st.session_state.separated_text = rows_to_tsv(separated_rows)
 
     with col2:
+        if st.button("Copy Separated", key="copy_button"):
+            st.session_state.copy_trigger = True
+
+    if st.session_state.get("copy_trigger"):
         st.components.v1.html(
             f"""
-            <div style="display:flex; flex-direction:column; gap:8px;">
-                <button
-                    id="copy-btn"
-                    style="
-                        width: 100%;
-                        padding: 0.6rem 1rem;
-                        border: 1px solid #666;
-                        border-radius: 0.5rem;
-                        background: #f5f5f5;
-                        cursor: pointer;
-                        font-size: 1rem;
-                    "
-                >
-                    Copy Separated
-                </button>
-
-                <div id="copy-status" style="font-size:0.9rem; color:#4CAF50;"></div>
-            </div>
-
             <script>
-            const textToCopy = {json.dumps(st.session_state.separated_text)};
-
-            document.getElementById("copy-btn").addEventListener("click", async function() {{
-                const status = document.getElementById("copy-status");
-
-                try {{
-                    await navigator.clipboard.writeText(textToCopy);
-                    status.innerText = "Copied!";
-                }} catch (err) {{
-                    try {{
-                        const temp = document.createElement("textarea");
-                        temp.value = textToCopy;
-                        document.body.appendChild(temp);
-                        temp.select();
-                        document.execCommand("copy");
-                        document.body.removeChild(temp);
-                        status.innerText = "Copied!";
-                    }} catch (err2) {{
-                        status.innerText = "Copy failed";
-                    }}
-                }}
-            }});
+            navigator.clipboard.writeText({json.dumps(st.session_state.separated_text)});
             </script>
             """,
-            height=80,
+            height=0,
         )
+
+        st.success("Copied!")
+        st.session_state.copy_trigger = False
 
     st.text_area(
         "Separated",
         st.session_state.separated_text,
         height=350
     )
+    
