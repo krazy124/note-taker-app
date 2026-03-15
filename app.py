@@ -298,8 +298,11 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
                     "code_lines": [],
                     "result": "",
                 }
-
-            current_example["notes"] = stripped.replace("# Notes:", "", 1).strip()
+        
+            note_text = stripped.replace("# Notes:", "", 1).strip()
+        
+            # store notes separately
+            current_example["notes"] = note_text
             i += 1
             continue
 
