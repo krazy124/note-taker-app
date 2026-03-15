@@ -132,7 +132,7 @@ def build_review_view_text(section_rows, show_setup, show_instruction, show_note
     lines = []
     previous_setup = None
 
-    for row in section_rows:
+    for index, row in enumerate(section_rows):
         full_code = str(row.get("Code", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
         instruction = str(row.get("Instruction", "")).strip()
         notes = str(row.get("Notes", "")).strip()
@@ -171,7 +171,9 @@ def build_review_view_text(section_rows, show_setup, show_instruction, show_note
             else:
                 lines.append(f"# Result: {result}")
 
-        lines.append("")
+        if index < len(section_rows) - 1:
+            lines.append("# __________________________________________________")
+            lines.append("")
 
     return "\n".join(lines).strip()
 
