@@ -101,8 +101,15 @@ def compile_block(section_name, concept):
 
         try:
 
+            full_code = ""
+
+            if ex["setup"]:
+                full_code += ex["setup"] + "\n"
+
+            full_code += ex["code"]
+
             with contextlib.redirect_stdout(stdout_buffer):
-                exec(ex["code"], {})
+                exec(full_code, {})
 
             result = stdout_buffer.getvalue()
 
@@ -131,6 +138,7 @@ def compile_block(section_name, concept):
             block += "\n"
 
     st.session_state.compiled_block = block
+
 
 
 # =========================
