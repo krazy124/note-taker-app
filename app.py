@@ -214,25 +214,37 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
     lines = block_text.splitlines()
     rows = []
 
+    topic = str(topic).strip().strip('"')
+    concept = str(concept).strip().strip('"')
+
     active_setup = ""
     current_example = None
     i = 0
+
+    def new_example():
+        return {
+            "setup": active_setup,
+            "instruction": "",
+            "notes": "",
+            "code_lines": [],
+            "result": "",
+        }
 
     def finalize_example():
         if current_example is None:
             return
 
+        code_only = "\n".join(current_example["code_lines"]).rstrip()
+
         has_content = (
             current_example["instruction"].strip()
             or current_example["notes"].strip()
             or current_example["result"].strip()
-            or "".join(current_example["code_lines"]).strip()
+            or code_only.strip()
         )
 
         if not has_content:
             return
-
-        code_only = "\n".join(current_example["code_lines"]).rstrip()
 
         full_code = ""
         if current_example["setup"].strip():
@@ -245,7 +257,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
             full_code += code_only.strip()
 
         rows.append([
-            section_id,
+            str(section_id).strip(),
             len(rows) + 1,
             topic,
             concept,
@@ -264,13 +276,17 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
             setup_lines = []
 
             while i < len(lines):
-                next_line = lines[i]
-                next_stripped = next_line.strip()
+                next_stripped = lines[i].strip()
 
-                if next_stripped == "# Setup:" or next_stripped.startswith("# Instruction:"):
+                if (
+                    next_stripped == "# Setup:"
+                    or next_stripped.startswith("# Instruction:")
+                    or next_stripped.startswith("# Notes:")
+                    or next_stripped.startswith("# Result:")
+                ):
                     break
 
-                setup_lines.append(next_line)
+                setup_lines.append(lines[i])
                 i += 1
 
             active_setup = "\n".join(setup_lines).strip()
@@ -278,69 +294,49 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
 
         if stripped.startswith("# Instruction:"):
             finalize_example()
-
-            current_example = {
-                "setup": active_setup,
-                "instruction": stripped.replace("# Instruction:", "", 1).strip(),
-                "notes": "",
-                "code_lines": [],
-                "result": "",
-            }
+            current_example = new_example()
+            current_example["instruction"] = stripped.replace("# Instruction:", "", 1).strip()
             i += 1
             continue
 
         if stripped.startswith("# Notes:"):
             if current_example is None:
-                current_example = {
-                    "setup": active_setup,
-                    "instruction": "",
-                    "notes": "",
-                    "code_lines": [],
-                    "result": "",
-                }
-        
-            note_text = stripped.replace("# Notes:", "", 1).strip()
-        
-            # store notes separately
-            current_example["notes"] = note_text
+                current_example = new_example()
+
+            current_example["notes"] = stripped.replace("# Notes:", "", 1).strip()
             i += 1
             continue
 
         if stripped.startswith("# Result:"):
             if current_example is None:
-                current_example = {
-                    "setup": active_setup,
-                    "instruction": "",
-                    "notes": "",
-                    "code_lines": [],
-                    "result": "",
-                }
+                current_example = new_example()
 
+            result_lines = []
             inline_result = stripped.replace("# Result:", "", 1).strip()
 
             if inline_result:
-                current_example["result"] = inline_result
-                i += 1
-                continue
+                result_lines.append(inline_result)
 
             i += 1
-            result_lines = []
 
             while i < len(lines):
                 next_line = lines[i]
                 next_stripped = next_line.strip()
 
-                if next_stripped == "":
-                    if result_lines:
-                        break
+                if not next_stripped:
                     i += 1
                     continue
 
-                if next_stripped == "# Setup:" or next_stripped.startswith("# Instruction:"):
+                if (
+                    next_stripped == "# Setup:"
+                    or next_stripped.startswith("# Instruction:")
+                    or next_stripped.startswith("# Notes:")
+                    or next_stripped.startswith("# Result:")
+                ):
                     break
 
                 if next_stripped.startswith("# "):
-                    result_lines.append(next_stripped[2:])
+                    result_lines.append(next_stripped[2:].rstrip())
                     i += 1
                     continue
 
