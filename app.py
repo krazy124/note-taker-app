@@ -43,7 +43,7 @@ def get_next_section_id():
 
     values = worksheet.col_values(1)
 
-    values = values[1:]  # skip header row
+    values = values[1:]  # remove header
 
     if not values:
         return "s1"
@@ -64,8 +64,7 @@ if "examples" not in st.session_state:
             "setup": "",
             "instruction": "",
             "notes": "",
-            "code": "",
-            "result": ""
+            "code": ""
         }
     ]
 
@@ -84,33 +83,9 @@ def add_example():
             "setup": "",
             "instruction": "",
             "notes": "",
-            "code": "",
-            "result": ""
+            "code": ""
         }
     )
-
-
-# =========================
-# Run Code
-# =========================
-def run_examples():
-
-    for i in range(len(st.session_state.examples)):
-
-        stdout_buffer = io.StringIO()
-
-        code = st.session_state.examples[i]["code"]
-
-        try:
-
-            with contextlib.redirect_stdout(stdout_buffer):
-                exec(code, {})
-
-            st.session_state.examples[i]["result"] = stdout_buffer.getvalue()
-
-        except Exception:
-
-            st.session_state.examples[i]["result"] = traceback.format_exc()
 
 
 # =========================
@@ -120,30 +95,37 @@ def compile_block(section_name, concept):
 
     block = ""
 
-    block += f"# Concept: {concept}\n\n"
-
     for ex in st.session_state.examples:
+
+        stdout_buffer = io.StringIO()
+
+        try:
+
+            with contextlib.redirect_stdout(stdout_buffer):
+                exec(ex["code"], {})
+
+            result = stdout_buffer.getvalue()
+
+        except Exception:
+            result = traceback.format_exc()
 
         if ex["setup"]:
             block += "# Setup:\n"
             block += ex["setup"] + "\n\n"
 
         if ex["instruction"]:
-            block += "# Instruction:\n"
-            block += ex["instruction"] + "\n\n"
+            block += f"# Instruction: {ex['instruction']}\n"
 
         if ex["notes"]:
-            block += "# Notes:\n"
-            block += ex["notes"] + "\n\n"
+            block += f"# Notes: {ex['notes']}\n"
 
-        if ex["code"]:
-            block += ex["code"] + "\n\n"
+        block += ex["code"] + "\n\n"
 
-        if ex["result"]:
+        if result:
 
             block += "# Result:\n"
 
-            for line in ex["result"].splitlines():
+            for line in result.splitlines():
                 block += "# " + line + "\n"
 
             block += "\n"
@@ -189,10 +171,8 @@ concept = st.text_input("Concept")
 
 
 # =========================
-# Example Entry Forms
+# Example Forms
 # =========================
-st.subheader("Example Entries")
-
 for i in range(len(st.session_state.examples)):
 
     ex = st.session_state.examples[i]
@@ -227,30 +207,21 @@ for i in range(len(st.session_state.examples)):
 
     ex["code"] = code_value if code_value else ""
 
-    ex["result"] = st.text_area(
-        "Result",
-        value=ex["result"],
-        key=f"result_{i}"
-    )
-
 
 st.button("Insert Another Example", on_click=add_example)
 
 
 # =========================
-# Controls
+# Compile Button
 # =========================
-col1, col2 = st.columns(2)
-
-with col1:
-    st.button("Run Code", on_click=run_examples)
-
-with col2:
-    st.button("Compile Block", on_click=lambda: compile_block(section_name, concept))
+st.button(
+    "Compile Block",
+    on_click=lambda: compile_block(section_name, concept)
+)
 
 
 # =========================
-# Block Preview
+# Preview
 # =========================
 st.subheader("Compiled Block Preview")
 
@@ -258,7 +229,7 @@ st.code(st.session_state.compiled_block, language="python")
 
 
 # =========================
-# Save Button
+# Save
 # =========================
 if st.button("Save to Google Sheets", use_container_width=True):
 
