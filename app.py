@@ -1,6 +1,7 @@
 import io
 import csv
 import json
+import html
 import contextlib
 
 import streamlit as st
@@ -61,6 +62,240 @@ def get_next_section_id():
             return f"s{num + 1}"
 
     return "s1"
+
+
+# =========================
+# Helpers
+# =========================
+def clean_label_text(value):
+    text = str(value).strip()
+    if text.startswith('"') and text.endswith('"') and len(text) >= 2:
+        text = text[1:-1]
+    return text.strip()
+
+
+def split_setup_and_code(full_code):
+    code_text = str(full_code).replace("\r\n", "\n").replace("\r", "\n").strip()
+
+    if "\n\n" in code_text:
+        setup_part, code_part = code_text.split("\n\n", 1)
+        return setup_part.strip(), code_part.strip()
+
+    return "", code_text
+
+
+def section_sort_key(section_id):
+    sid = str(section_id).strip().lower()
+    if sid.startswith("s") and sid[1:].isdigit():
+        return int(sid[1:])
+    return 999999
+
+
+def get_example_sections():
+    worksheet = connect_to_example_sheet()
+    records = worksheet.get_all_records()
+
+    grouped = {}
+
+    for record in records:
+        section_id = clean_label_text(record.get("Section ID", ""))
+        topic = clean_label_text(record.get("Topic", ""))
+        concept = clean_label_text(record.get("Concept", ""))
+
+        if not section_id:
+            continue
+
+        if section_id not in grouped:
+            grouped[section_id] = {
+                "topic": topic,
+                "concept": concept,
+                "rows": []
+            }
+
+        grouped[section_id]["rows"].append(record)
+
+    ordered_ids = sorted(grouped.keys(), key=section_sort_key)
+    return ordered_ids, grouped
+
+
+def get_sorted_section_rows(section_rows):
+    def row_order_key(row):
+        raw_order = str(row.get("Section Order", "")).strip()
+        return int(raw_order) if raw_order.isdigit() else 999999
+
+    return sorted(section_rows, key=row_order_key)
+
+
+def render_review_section_html(section_id, topic, concept, section_rows, show_setup, show_instruction, show_notes, show_code, show_result):
+    hide_setup_css = "display:none;" if not show_setup else ""
+    hide_instruction_css = "display:none;" if not show_instruction else ""
+    hide_notes_css = "display:none;" if not show_notes else ""
+    hide_code_css = "display:none;" if not show_code else ""
+    hide_result_css = "display:none;" if not show_result else ""
+
+    html_parts = [
+        f"""
+        <style>
+            .review-wrap {{
+                font-family: Arial, sans-serif;
+                margin-top: 0.5rem;
+            }}
+
+            .review-header {{
+                padding: 14px 16px;
+                border: 1px solid #d9d9d9;
+                border-radius: 10px;
+                background: #f8f9fb;
+                margin-bottom: 14px;
+            }}
+
+            .review-header h3 {{
+                margin: 0 0 6px 0;
+                font-size: 1.25rem;
+            }}
+
+            .review-meta {{
+                margin: 2px 0;
+                font-size: 0.95rem;
+            }}
+
+            .review-example {{
+                border: 1px solid #d9d9d9;
+                border-radius: 10px;
+                padding: 14px 16px;
+                margin-bottom: 14px;
+                background: white;
+            }}
+
+            .review-example-title {{
+                font-weight: bold;
+                margin-bottom: 10px;
+                font-size: 1rem;
+            }}
+
+            .setup-block {{
+                {hide_setup_css}
+                margin-bottom: 10px;
+            }}
+
+            .instruction-block {{
+                {hide_instruction_css}
+                margin-bottom: 8px;
+                font-weight: 600;
+            }}
+
+            .notes-block {{
+                {hide_notes_css}
+                margin-bottom: 10px;
+                color: #444;
+                font-style: italic;
+            }}
+
+            .code-block {{
+                {hide_code_css}
+                margin-bottom: 10px;
+            }}
+
+            .result-block {{
+                {hide_result_css}
+                margin-bottom: 0;
+            }}
+
+            .label {{
+                font-weight: 700;
+                margin-bottom: 4px;
+            }}
+
+            .code-pre {{
+                background: #f6f8fa;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                padding: 10px 12px;
+                white-space: pre-wrap;
+                font-family: Consolas, monospace;
+                font-size: 0.92rem;
+                line-height: 1.4;
+                margin: 0;
+            }}
+        </style>
+
+        <div class="review-wrap">
+            <div class="review-header">
+                <h3>{html.escape(topic)} - {html.escape(concept)}</h3>
+                <div class="review-meta"><strong>Section ID:</strong> {html.escape(section_id)}</div>
+                <div class="review-meta"><strong>Topic:</strong> {html.escape(topic)}</div>
+                <div class="review-meta"><strong>Concept:</strong> {html.escape(concept)}</div>
+            </div>
+        """
+    ]
+
+    previous_setup = None
+
+    for row in section_rows:
+        section_order = clean_label_text(row.get("Section Order", ""))
+        instruction = str(row.get("Instruction", "")).strip()
+        full_code = str(row.get("Code", "")).rstrip()
+        result = str(row.get("Result", "")).rstrip()
+        notes = str(row.get("Notes", "")).strip()
+
+        setup_text, code_text = split_setup_and_code(full_code)
+
+        show_setup_for_example = bool(setup_text) and setup_text != previous_setup
+        if setup_text:
+            previous_setup = setup_text
+
+        html_parts.append(f'<div class="review-example">')
+        html_parts.append(f'<div class="review-example-title">Example {html.escape(section_order)}</div>')
+
+        if show_setup_for_example:
+            html_parts.append(
+                f"""
+                <div class="setup-block">
+                    <div class="label">Setup</div>
+                    <pre class="code-pre">{html.escape(setup_text)}</pre>
+                </div>
+                """
+            )
+
+        html_parts.append(
+            f"""
+            <div class="instruction-block">
+                Instruction: {html.escape(instruction)}
+            </div>
+            """
+        )
+
+        if notes:
+            html_parts.append(
+                f"""
+                <div class="notes-block">
+                    Notes: {html.escape(notes)}
+                </div>
+                """
+            )
+
+        html_parts.append(
+            f"""
+            <div class="code-block">
+                <div class="label">Code</div>
+                <pre class="code-pre">{html.escape(code_text)}</pre>
+            </div>
+            """
+        )
+
+        html_parts.append(
+            f"""
+            <div class="result-block">
+                <div class="label">Result</div>
+                <pre class="code-pre">{html.escape(result)}</pre>
+            </div>
+            """
+        )
+
+        html_parts.append("</div>")
+
+    html_parts.append("</div>")
+    return "".join(html_parts)
 
 
 # =========================
@@ -369,7 +604,7 @@ def rows_to_tsv(rows):
 # =========================
 st.title("Python Review Block Builder")
 
-tab1, tab2 = st.tabs(["Build Review Block", "Separate Existing Block"])
+tab1, tab2, tab3 = st.tabs(["Build Review Block", "Separate Existing Block", "Review Viewer"])
 
 
 with tab1:
@@ -511,3 +746,56 @@ with tab2:
         st.session_state.separated_text,
         height=350
     )
+
+
+with tab3:
+    st.subheader("Review Viewer")
+
+    try:
+        section_ids, grouped_sections = get_example_sections()
+
+        if not section_ids:
+            st.info("No Example View rows found yet.")
+        else:
+            selected_section_id = st.selectbox(
+                "Select Section ID",
+                options=section_ids,
+                format_func=lambda sid: f"{sid} - {grouped_sections[sid]['topic']} - {grouped_sections[sid]['concept']}"
+            )
+
+            selected_group = grouped_sections[selected_section_id]
+            selected_rows = get_sorted_section_rows(selected_group["rows"])
+
+            col1, col2, col3, col4, col5 = st.columns(5)
+
+            with col1:
+                show_setup = st.checkbox("Setup", value=True)
+
+            with col2:
+                show_instruction = st.checkbox("Instruction", value=True)
+
+            with col3:
+                show_notes = st.checkbox("Notes", value=True)
+
+            with col4:
+                show_code = st.checkbox("Code", value=True)
+
+            with col5:
+                show_result = st.checkbox("Result", value=True)
+
+            rendered_html = render_review_section_html(
+                section_id=selected_section_id,
+                topic=selected_group["topic"],
+                concept=selected_group["concept"],
+                section_rows=selected_rows,
+                show_setup=show_setup,
+                show_instruction=show_instruction,
+                show_notes=show_notes,
+                show_code=show_code,
+                show_result=show_result
+            )
+
+            st.markdown(rendered_html, unsafe_allow_html=True)
+
+    except Exception as e:
+        st.error(f"Error loading review viewer: {e}")
