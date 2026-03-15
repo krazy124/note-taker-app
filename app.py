@@ -1,6 +1,7 @@
 import io
 import contextlib
 import traceback
+
 import streamlit as st
 from streamlit_ace import st_ace
 import gspread
@@ -42,16 +43,16 @@ def get_next_section_id():
 
     values = worksheet.col_values(1)
 
-    if len(values) <= 1:
+    values = values[1:]  # skip header row
+
+    if not values:
         return "s1"
 
     last = values[-1]
 
-    try:
-        num = int(last.replace("s", ""))
-        return f"s{num+1}"
-    except:
-        return "s1"
+    num = int(last.replace("s", ""))
+
+    return f"s{num+1}"
 
 
 # =========================
@@ -73,6 +74,9 @@ if "compiled_block" not in st.session_state:
     st.session_state.compiled_block = ""
 
 
+# =========================
+# Add Example
+# =========================
 def add_example():
 
     st.session_state.examples.append(
@@ -87,13 +91,35 @@ def add_example():
 
 
 # =========================
+# Run Code
+# =========================
+def run_examples():
+
+    for i in range(len(st.session_state.examples)):
+
+        stdout_buffer = io.StringIO()
+
+        code = st.session_state.examples[i]["code"]
+
+        try:
+
+            with contextlib.redirect_stdout(stdout_buffer):
+                exec(code, {})
+
+            st.session_state.examples[i]["result"] = stdout_buffer.getvalue()
+
+        except Exception:
+
+            st.session_state.examples[i]["result"] = traceback.format_exc()
+
+
+# =========================
 # Compile Block
 # =========================
 def compile_block(section_name, concept):
 
     block = ""
 
-    block += f"# Section: {section_name}\n"
     block += f"# Concept: {concept}\n\n"
 
     for ex in st.session_state.examples:
@@ -114,33 +140,19 @@ def compile_block(section_name, concept):
             block += ex["code"] + "\n\n"
 
         if ex["result"]:
+
             block += "# Result:\n"
-            block += ex["result"] + "\n\n"
+
+            for line in ex["result"].splitlines():
+                block += "# " + line + "\n"
+
+            block += "\n"
 
     st.session_state.compiled_block = block
 
 
 # =========================
-# Run Code
-# =========================
-def run_examples():
-
-    for ex in st.session_state.examples:
-
-        stdout_buffer = io.StringIO()
-
-        try:
-            with contextlib.redirect_stdout(stdout_buffer):
-                exec(ex["code"], {})
-
-            ex["result"] = stdout_buffer.getvalue()
-
-        except Exception:
-            ex["result"] = traceback.format_exc()
-
-
-# =========================
-# Save to Google Sheets
+# Save Block
 # =========================
 def save_block(section_name, concept):
 
@@ -167,7 +179,7 @@ st.title("Python Review Block Builder")
 
 
 # =========================
-# Section Info
+# Section Fields
 # =========================
 st.subheader("Section Information")
 
@@ -177,11 +189,13 @@ concept = st.text_input("Concept")
 
 
 # =========================
-# Example Forms
+# Example Entry Forms
 # =========================
 st.subheader("Example Entries")
 
-for i, ex in enumerate(st.session_state.examples):
+for i in range(len(st.session_state.examples)):
+
+    ex = st.session_state.examples[i]
 
     st.markdown(f"### Example {i+1}")
 
@@ -203,13 +217,15 @@ for i, ex in enumerate(st.session_state.examples):
         key=f"notes_{i}"
     )
 
-    ex["code"] = st_ace(
+    code_value = st_ace(
         value=ex["code"],
         language="python",
         theme="monokai",
         key=f"code_{i}",
         height=250
     )
+
+    ex["code"] = code_value if code_value else ""
 
     ex["result"] = st.text_area(
         "Result",
@@ -234,7 +250,7 @@ with col2:
 
 
 # =========================
-# Preview Block
+# Block Preview
 # =========================
 st.subheader("Compiled Block Preview")
 
@@ -242,9 +258,11 @@ st.code(st.session_state.compiled_block, language="python")
 
 
 # =========================
-# Save
+# Save Button
 # =========================
 if st.button("Save to Google Sheets", use_container_width=True):
+
+    compile_block(section_name, concept)
 
     if not section_name:
         st.error("Section Name required")
