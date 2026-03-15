@@ -443,15 +443,47 @@ with tab2:
         key="block_content_input"
     )
 
-    if st.button("Separate", key="separate_button"):
-        separated_rows = parse_block_content_to_rows(
-            section_id=separate_section_id,
-            topic=separate_topic,
-            concept=separate_concept,
-            block_text=block_content_input
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("Separate", key="separate_button"):
+            separated_rows = parse_block_content_to_rows(
+                section_id=separate_section_id,
+                topic=separate_topic,
+                concept=separate_concept,
+                block_text=block_content_input
+            )
+
+            st.session_state.separated_text = rows_to_tsv(separated_rows)
+
+    with col2:
+        copy_safe_text = (
+            st.session_state.separated_text
+            .replace("\\", "\\\\")
+            .replace("`", "\\`")
+            .replace("$", "\\$")
         )
 
-        st.session_state.separated_text = rows_to_tsv(separated_rows)
+        st.components.v1.html(
+            f"""
+            <button
+                onclick="navigator.clipboard.writeText(`{copy_safe_text}`)"
+                style="
+                    width: 100%;
+                    padding: 0.6rem 1rem;
+                    margin-top: 0.1rem;
+                    border: 1px solid #999;
+                    border-radius: 0.5rem;
+                    background: white;
+                    cursor: pointer;
+                    font-size: 1rem;
+                "
+            >
+                Copy Separated
+            </button>
+            """,
+            height=50,
+        )
 
     st.text_area(
         "Separated",
