@@ -1,4 +1,5 @@
 import io
+import csv
 import contextlib
 
 import streamlit as st
@@ -80,6 +81,9 @@ if "compiled_block" not in st.session_state:
 if "example_rows" not in st.session_state:
     st.session_state.example_rows = []
 
+if "separated_text" not in st.session_state:
+    st.session_state.separated_text = ""
+
 
 # =========================
 # Add Example
@@ -150,15 +154,15 @@ def compile_block(section_name, concept):
             code_for_example_view += active_setup + "\n\n"
         code_for_example_view += ex["code"]
 
-        example_rows.append({
-            "section_order": i,
-            "topic": section_name,
-            "concept": concept,
-            "instruction": ex["instruction"],
-            "code": code_for_example_view.strip(),
-            "result": result,
-            "notes": ex["notes"]
-        })
+        example_rows.append([
+            i,
+            section_name,
+            concept,
+            ex["instruction"],
+            code_for_example_view.strip(),
+            result,
+            ex["notes"]
+        ])
 
     st.session_state.compiled_block = block
     st.session_state.example_rows = example_rows
@@ -188,13 +192,13 @@ def save_block_and_examples(section_name, concept):
         for ex_row in st.session_state.example_rows:
             rows_to_save.append([
                 section_id,
-                ex_row["section_order"],
-                ex_row["topic"],
-                ex_row["concept"],
-                ex_row["instruction"],
-                ex_row["code"],
-                ex_row["result"],
-                ex_row["notes"]
+                ex_row[0],  # Section Order
+                ex_row[1],  # Topic
+                ex_row[2],  # Concept
+                ex_row[3],  # Instruction
+                ex_row[4],  # Code
+                ex_row[5],  # Result
+                ex_row[6],  # Notes
             ])
 
         example_sheet.append_rows(rows_to_save)
@@ -203,62 +207,255 @@ def save_block_and_examples(section_name, concept):
 
 
 # =========================
+# Separate Existing Block Content
+# =========================
+def parse_block_content_to_rows(section_id, topic, concept, block_text):
+    lines = block_text.splitlines()
+    rows = []
+
+    active_setup = ""
+    current_example = None
+    i = 0
+
+    def finalize_example():
+        if current_example is None:
+            return
+
+        has_content = (
+            current_example["instruction"].strip()
+            or current_example["notes"].strip()
+            or current_example["result"].strip()
+            or "".join(current_example["code_lines"]).strip()
+        )
+
+        if not has_content:
+            return
+
+        code_only = "\n".join(current_example["code_lines"]).rstrip()
+
+        full_code = ""
+        if current_example["setup"].strip():
+            full_code += current_example["setup"].strip()
+
+        if current_example["setup"].strip() and code_only.strip():
+            full_code += "\n\n"
+
+        if code_only.strip():
+            full_code += code_only.strip()
+
+        rows.append([
+            section_id,
+            len(rows) + 1,
+            topic,
+            concept,
+            current_example["instruction"].strip(),
+            full_code.strip(),
+            current_example["result"].strip(),
+            current_example["notes"].strip(),
+        ])
+
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        if stripped == "# Setup:":
+            i += 1
+            setup_lines = []
+
+            while i < len(lines):
+                next_line = lines[i]
+                next_stripped = next_line.strip()
+
+                if next_stripped == "# Setup:" or next_stripped.startswith("# Instruction:"):
+                    break
+
+                setup_lines.append(next_line)
+                i += 1
+
+            active_setup = "\n".join(setup_lines).strip()
+            continue
+
+        if stripped.startswith("# Instruction:"):
+            finalize_example()
+
+            current_example = {
+                "setup": active_setup,
+                "instruction": stripped.replace("# Instruction:", "", 1).strip(),
+                "notes": "",
+                "code_lines": [],
+                "result": "",
+            }
+            i += 1
+            continue
+
+        if stripped.startswith("# Notes:"):
+            if current_example is None:
+                current_example = {
+                    "setup": active_setup,
+                    "instruction": "",
+                    "notes": "",
+                    "code_lines": [],
+                    "result": "",
+                }
+
+            current_example["notes"] = stripped.replace("# Notes:", "", 1).strip()
+            i += 1
+            continue
+
+        if stripped.startswith("# Result:"):
+            if current_example is None:
+                current_example = {
+                    "setup": active_setup,
+                    "instruction": "",
+                    "notes": "",
+                    "code_lines": [],
+                    "result": "",
+                }
+
+            inline_result = stripped.replace("# Result:", "", 1).strip()
+
+            if inline_result:
+                current_example["result"] = inline_result
+                i += 1
+                continue
+
+            i += 1
+            result_lines = []
+
+            while i < len(lines):
+                next_line = lines[i]
+                next_stripped = next_line.strip()
+
+                if next_stripped == "":
+                    if result_lines:
+                        break
+                    i += 1
+                    continue
+
+                if next_stripped == "# Setup:" or next_stripped.startswith("# Instruction:"):
+                    break
+
+                if next_stripped.startswith("# "):
+                    result_lines.append(next_stripped[2:])
+                    i += 1
+                    continue
+
+                break
+
+            current_example["result"] = "\n".join(result_lines).strip()
+            continue
+
+        if current_example is not None:
+            current_example["code_lines"].append(line)
+
+        i += 1
+
+    finalize_example()
+    return rows
+
+
+def rows_to_tsv(rows):
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_MINIMAL)
+
+    for row in rows:
+        writer.writerow(row)
+
+    return buffer.getvalue()
+
+
+# =========================
 # App UI
 # =========================
 st.title("Python Review Block Builder")
 
-st.subheader("Section Information")
-section_name = st.text_input("Section Name")
-concept = st.text_input("Concept")
+tab1, tab2 = st.tabs(["Build Review Block", "Separate Existing Block"])
 
-for i in range(len(st.session_state.examples)):
-    ex = st.session_state.examples[i]
 
-    st.markdown(f"### Example {i+1}")
+with tab1:
+    st.subheader("Section Information")
+    section_name = st.text_input("Section Name")
+    concept = st.text_input("Concept")
 
-    ex["setup"] = st.text_area(
-        "Setup",
-        value=ex["setup"],
-        key=f"setup_{i}"
+    for i in range(len(st.session_state.examples)):
+        ex = st.session_state.examples[i]
+
+        st.markdown(f"### Example {i+1}")
+
+        ex["setup"] = st.text_area(
+            "Setup",
+            value=ex["setup"],
+            key=f"setup_{i}"
+        )
+
+        ex["instruction"] = st.text_area(
+            "Instruction",
+            value=ex["instruction"],
+            key=f"instruction_{i}"
+        )
+
+        ex["notes"] = st.text_area(
+            "Notes",
+            value=ex["notes"],
+            key=f"notes_{i}"
+        )
+
+        code_value = st_ace(
+            value=ex["code"],
+            language="python",
+            theme="monokai",
+            key=f"code_{i}",
+            height=250
+        )
+
+        ex["code"] = code_value if code_value else ""
+
+    st.button("Insert Another Example", on_click=add_example)
+
+    st.button(
+        "Compile Block",
+        on_click=lambda: compile_block(section_name, concept)
     )
 
-    ex["instruction"] = st.text_area(
-        "Instruction",
-        value=ex["instruction"],
-        key=f"instruction_{i}"
+    st.subheader("Compiled Block Preview")
+    st.code(st.session_state.compiled_block, language="python")
+
+    if st.button("Save to Google Sheets", use_container_width=True):
+        compile_block(section_name, concept)
+
+        if not section_name:
+            st.error("Section Name required")
+        else:
+            section_id = save_block_and_examples(section_name, concept)
+            st.success(f"Saved as {section_id}")
+
+
+with tab2:
+    st.subheader("Separate Existing Block Content")
+
+    separate_section_id = st.text_input("Section ID", key="separate_section_id")
+    separate_topic = st.text_input("Topic", key="separate_topic")
+    separate_concept = st.text_input("Concept", key="separate_concept")
+
+    block_content_input = st.text_area(
+        "Block Content",
+        height=350,
+        key="block_content_input"
     )
 
-    ex["notes"] = st.text_area(
-        "Notes",
-        value=ex["notes"],
-        key=f"notes_{i}"
+    if st.button("Separate", key="separate_button"):
+        separated_rows = parse_block_content_to_rows(
+            section_id=separate_section_id,
+            topic=separate_topic,
+            concept=separate_concept,
+            block_text=block_content_input
+        )
+
+        st.session_state.separated_text = rows_to_tsv(separated_rows)
+
+    st.text_area(
+        "Separated",
+        value=st.session_state.separated_text,
+        height=350,
+        key="separated_output"
     )
-
-    code_value = st_ace(
-        value=ex["code"],
-        language="python",
-        theme="monokai",
-        key=f"code_{i}",
-        height=250
-    )
-
-    ex["code"] = code_value if code_value else ""
-
-st.button("Insert Another Example", on_click=add_example)
-
-st.button(
-    "Compile Block",
-    on_click=lambda: compile_block(section_name, concept)
-)
-
-st.subheader("Compiled Block Preview")
-st.code(st.session_state.compiled_block, language="python")
-
-if st.button("Save to Google Sheets", use_container_width=True):
-    compile_block(section_name, concept)
-
-    if not section_name:
-        st.error("Section Name required")
-    else:
-        section_id = save_block_and_examples(section_name, concept)
-        st.success(f"Saved as {section_id}")
