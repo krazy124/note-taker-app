@@ -116,22 +116,21 @@ def compile_block(section_name, concept):
 
             try:
                 exec(active_setup, runtime_env)
-            except Exception:
-                result = traceback.format_exc()
+            except Exception as e:
+                result = f"Error: {e}"
 
         if not result:
             try:
                 with contextlib.redirect_stdout(stdout_buffer):
                     exec(ex["code"], runtime_env)
-            
+
                 result = stdout_buffer.getvalue().strip()
-            
-                # If nothing printed, treat as normal case
-                if not result:
+
+                if result == "":
                     result = "No result"
 
-except Exception as e:
-    result = f"Error: {e}"
+            except Exception as e:
+                result = f"Error: {e}"
 
         if ex["instruction"]:
             block += f"# Instruction: {ex['instruction']}\n"
@@ -163,7 +162,6 @@ except Exception as e:
 
     st.session_state.compiled_block = block
     st.session_state.example_rows = example_rows
-
 
 # =========================
 # Save Block + Examples
