@@ -1,70 +1,20 @@
 import io
 import contextlib
 import traceback
-import textwrap
-
 import streamlit as st
 from streamlit_ace import st_ace
 import gspread
 from google.oauth2.service_account import Credentials
 
 
-st.set_page_config(page_title="Python Notes Code Editor", layout="wide")
-
-st.markdown(
-    """
-    <style>
-    .block-container {
-        padding-top: 0.4rem;
-        padding-bottom: 0rem;
-        padding-left: 0.5rem;
-        padding-right: 0.5rem;
-        max-width: 100%;
-    }
-
-    div[data-testid="stVerticalBlock"] {
-        gap: 0.35rem;
-    }
-
-    h1 {
-        font-size: 1.8rem !important;
-        margin-bottom: 0.2rem !important;
-    }
-
-    h2, h3 {
-        margin-top: 0.35rem !important;
-        margin-bottom: 0.2rem !important;
-    }
-
-    p {
-        margin-bottom: 0.2rem !important;
-    }
-
-    @media (max-width: 768px) {
-        .block-container {
-            padding-top: 0.2rem;
-            padding-left: 0.35rem;
-            padding-right: 0.35rem;
-        }
-
-        h1 {
-            font-size: 1.4rem !important;
-        }
-
-        h2, h3 {
-            font-size: 1.15rem !important;
-        }
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
+st.set_page_config(page_title="Python Review Block Builder", layout="wide")
 
 
 # =========================
 # Google Sheets Connection
 # =========================
 def connect_to_sheet():
+
     scope = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
@@ -78,202 +28,228 @@ def connect_to_sheet():
     client = gspread.authorize(creds)
 
     sheet = client.open_by_key("14pnlZ5jfXNC-AGrSsRQAmUQ17Acbn5xxDZQMsAlJQlo")
-    worksheet = sheet.sheet1
+    worksheet = sheet.worksheet("New Review")
 
     return worksheet
 
 
 # =========================
-# Text Formatting Helpers
+# Section ID Generator
 # =========================
-def wrap_text_for_sheet(text, width):
-    if not text or not text.strip():
-        return ""
+def get_next_section_id():
 
-    paragraphs = text.splitlines()
-    wrapped_paragraphs = []
+    worksheet = connect_to_sheet()
 
-    for paragraph in paragraphs:
-        if not paragraph.strip():
-            wrapped_paragraphs.append("")
-        else:
-            wrapped_paragraphs.append(
-                textwrap.fill(paragraph.strip(), width=width)
-            )
+    values = worksheet.col_values(1)
 
-    return "\n".join(wrapped_paragraphs)
+    if len(values) <= 1:
+        return "s1"
 
-
-# =========================
-# Session State Setup
-# =========================
-if "editor_text" not in st.session_state:
-    st.session_state.editor_text = ""
-
-if "console_output" not in st.session_state:
-    st.session_state.console_output = ""
-
-if "console_error" not in st.session_state:
-    st.session_state.console_error = ""
-
-
-# =========================
-# Button Functions
-# =========================
-def clear_console():
-    st.session_state.console_output = ""
-    st.session_state.console_error = ""
-
-
-def run_code():
-    code_to_run = st.session_state.editor_text
-    stdout_buffer = io.StringIO()
+    last = values[-1]
 
     try:
-        with contextlib.redirect_stdout(stdout_buffer):
-            exec(code_to_run, {})
-        st.session_state.console_output = stdout_buffer.getvalue()
-        st.session_state.console_error = ""
-    except Exception:
-        st.session_state.console_output = stdout_buffer.getvalue()
-        st.session_state.console_error = traceback.format_exc()
-
-
-def save_to_google_sheets(category, concept, code_example, output_text, explanation, notes, wrap_width):
-    try:
-        worksheet = connect_to_sheet()
-
-        wrapped_explanation = wrap_text_for_sheet(explanation, wrap_width)
-        wrapped_notes = wrap_text_for_sheet(notes, wrap_width)
-
-        new_row = [
-            category,
-            concept,
-            code_example,
-            output_text,
-            wrapped_explanation,
-            wrapped_notes
-        ]
-
-        worksheet.append_row(new_row)
-        return True, "Saved to Google Sheets!"
-    except Exception as e:
-        return False, f"Error saving to Google Sheets: {e}"
+        num = int(last.replace("s", ""))
+        return f"s{num+1}"
+    except:
+        return "s1"
 
 
 # =========================
-# App UI
+# Example State
 # =========================
-st.title("Python Notes Editor")
+if "examples" not in st.session_state:
+    st.session_state.examples = [
+        {
+            "setup": "",
+            "instruction": "",
+            "notes": "",
+            "code": "",
+            "result": ""
+        }
+    ]
 
 
-# =========================
-# Note Fields
-# =========================
-st.subheader("Note Entry")
-
-category = st.text_input("Category")
-concept = st.text_input("Concept")
+if "compiled_block" not in st.session_state:
+    st.session_state.compiled_block = ""
 
 
-# =========================
-# Code Editor
-# =========================
-st.subheader("Code Example")
+def add_example():
 
-editor_value = st_ace(
-    value=st.session_state.editor_text,
-    language="python",
-    theme="monokai",
-    key="ace_editor",
-    height=420,
-    font_size=15,
-    tab_size=4,
-    show_gutter=True,
-    wrap=True,
-    auto_update=True,
-)
-
-st.session_state.editor_text = editor_value if editor_value is not None else ""
-
-
-# =========================
-# Buttons
-# =========================
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    st.button("Run Code", on_click=run_code, use_container_width=True)
-
-with col2:
-    st.button("Clear Console", on_click=clear_console, use_container_width=True)
-
-with col3:
-    st.download_button(
-        label="Download Code",
-        data=st.session_state.editor_text,
-        file_name="example.py",
-        mime="text/plain",
-        use_container_width=True
+    st.session_state.examples.append(
+        {
+            "setup": "",
+            "instruction": "",
+            "notes": "",
+            "code": "",
+            "result": ""
+        }
     )
 
 
 # =========================
-# Console Output
+# Compile Block
 # =========================
-st.subheader("Console")
-st.code(st.session_state.console_output or "", language="text")
+def compile_block(section_name, concept):
 
-if st.session_state.console_error:
-    st.subheader("Errors")
-    st.code(st.session_state.console_error, language="text")
+    block = ""
+
+    block += f"# Section: {section_name}\n"
+    block += f"# Concept: {concept}\n\n"
+
+    for ex in st.session_state.examples:
+
+        if ex["setup"]:
+            block += "# Setup:\n"
+            block += ex["setup"] + "\n\n"
+
+        if ex["instruction"]:
+            block += "# Instruction:\n"
+            block += ex["instruction"] + "\n\n"
+
+        if ex["notes"]:
+            block += "# Notes:\n"
+            block += ex["notes"] + "\n\n"
+
+        if ex["code"]:
+            block += ex["code"] + "\n\n"
+
+        if ex["result"]:
+            block += "# Result:\n"
+            block += ex["result"] + "\n\n"
+
+    st.session_state.compiled_block = block
 
 
 # =========================
-# Remaining Note Fields
+# Run Code
 # =========================
-st.subheader("Additional Fields")
+def run_examples():
 
-output_text = st.text_area(
-    "Output / Result",
-    value=st.session_state.console_output,
-    height=100
-)
+    for ex in st.session_state.examples:
 
-wrap_width = st.number_input(
-    "Characters before line break for Explanation and Notes",
-    min_value=20,
-    max_value=200,
-    value=60,
-    step=5
-)
+        stdout_buffer = io.StringIO()
 
-explanation = st.text_area(
-    "Explanation",
-    height=140
-)
+        try:
+            with contextlib.redirect_stdout(stdout_buffer):
+                exec(ex["code"], {})
 
-notes = st.text_area(
-    "Notes",
-    height=140
-)
+            ex["result"] = stdout_buffer.getvalue()
+
+        except Exception:
+            ex["result"] = traceback.format_exc()
 
 
 # =========================
 # Save to Google Sheets
 # =========================
-if st.button("Save to Google Sheets", use_container_width=True):
-    success, message = save_to_google_sheets(
-        category=category,
-        concept=concept,
-        code_example=st.session_state.editor_text,
-        output_text=output_text,
-        explanation=explanation,
-        notes=notes,
-        wrap_width=wrap_width,
+def save_block(section_name, concept):
+
+    worksheet = connect_to_sheet()
+
+    section_id = get_next_section_id()
+
+    new_row = [
+        section_id,
+        section_name,
+        concept,
+        st.session_state.compiled_block
+    ]
+
+    worksheet.append_row(new_row)
+
+    return section_id
+
+
+# =========================
+# App UI
+# =========================
+st.title("Python Review Block Builder")
+
+
+# =========================
+# Section Info
+# =========================
+st.subheader("Section Information")
+
+section_name = st.text_input("Section Name")
+
+concept = st.text_input("Concept")
+
+
+# =========================
+# Example Forms
+# =========================
+st.subheader("Example Entries")
+
+for i, ex in enumerate(st.session_state.examples):
+
+    st.markdown(f"### Example {i+1}")
+
+    ex["setup"] = st.text_area(
+        "Setup",
+        value=ex["setup"],
+        key=f"setup_{i}"
     )
 
-    if success:
-        st.success(message)
+    ex["instruction"] = st.text_area(
+        "Instruction",
+        value=ex["instruction"],
+        key=f"instruction_{i}"
+    )
+
+    ex["notes"] = st.text_area(
+        "Notes",
+        value=ex["notes"],
+        key=f"notes_{i}"
+    )
+
+    ex["code"] = st_ace(
+        value=ex["code"],
+        language="python",
+        theme="monokai",
+        key=f"code_{i}",
+        height=250
+    )
+
+    ex["result"] = st.text_area(
+        "Result",
+        value=ex["result"],
+        key=f"result_{i}"
+    )
+
+
+st.button("Insert Another Example", on_click=add_example)
+
+
+# =========================
+# Controls
+# =========================
+col1, col2 = st.columns(2)
+
+with col1:
+    st.button("Run Code", on_click=run_examples)
+
+with col2:
+    st.button("Compile Block", on_click=lambda: compile_block(section_name, concept))
+
+
+# =========================
+# Preview Block
+# =========================
+st.subheader("Compiled Block Preview")
+
+st.code(st.session_state.compiled_block, language="python")
+
+
+# =========================
+# Save
+# =========================
+if st.button("Save to Google Sheets", use_container_width=True):
+
+    if not section_name:
+        st.error("Section Name required")
     else:
-        st.error(message)
+
+        section_id = save_block(section_name, concept)
+
+        st.success(f"Saved as {section_id}")
