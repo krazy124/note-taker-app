@@ -637,43 +637,85 @@ with tab3:
         else:
             selected_section_id = st.selectbox(
                 "Select Section ID",
-                options=section_ids,
-                format_func=lambda sid: f"{sid} - {grouped_sections[sid]['topic']} - {grouped_sections[sid]['concept']}"
+                options=["All Sections"] + section_ids,
+                format_func=lambda sid: "All Sections" if sid == "All Sections" else f"{sid} - {grouped_sections[sid]['topic']} - {grouped_sections[sid]['concept']}"
             )
 
-            selected_group = grouped_sections[selected_section_id]
-            selected_rows = get_sorted_section_rows(selected_group["rows"])
+            if selected_section_id == "All Sections":
+                st.markdown("### All Sections")
+                st.caption(f"Total Sections: {len(section_ids)}")
+            else:
+                selected_group = grouped_sections[selected_section_id]
+                st.markdown(f"### {selected_group['topic']} - {selected_group['concept']}")
+                st.caption(f"Section ID: {selected_section_id}")
 
-            st.markdown(f"### {selected_group['topic']} - {selected_group['concept']}")
-            st.caption(f"Section ID: {selected_section_id}")
-
-            col1, col2, col3, col4, col5 = st.columns(5)
+            col1, col2, col3, col4, col5, col6 = st.columns(6)
 
             with col1:
-                show_setup = st.checkbox("Setup", value=True)
+                show_headers = st.checkbox("Headers", value=True)
 
             with col2:
-                show_instruction = st.checkbox("Instruction", value=True)
+                show_setup = st.checkbox("Setup", value=True)
 
             with col3:
-                show_notes = st.checkbox("Notes", value=True)
+                show_instruction = st.checkbox("Instruction", value=True)
 
             with col4:
-                show_code = st.checkbox("Code", value=True)
+                show_notes = st.checkbox("Notes", value=True)
 
             with col5:
+                show_code = st.checkbox("Code", value=True)
+
+            with col6:
                 show_result = st.checkbox("Result", value=True)
 
-            review_text = build_review_view_text(
-                section_rows=selected_rows,
-                show_setup=show_setup,
-                show_instruction=show_instruction,
-                show_notes=show_notes,
-                show_code=show_code,
-                show_result=show_result
-            )
+            combined_lines = []
+
+            if selected_section_id == "All Sections":
+                for sid in section_ids:
+                    group = grouped_sections[sid]
+                    rows = get_sorted_section_rows(group["rows"])
+
+                    if show_headers:
+                        combined_lines.append(f"# ===== {sid} | {group['topic']} - {group['concept']} =====")
+                        combined_lines.append("")
+
+                    section_text = build_review_view_text(
+                        section_rows=rows,
+                        show_setup=show_setup,
+                        show_instruction=show_instruction,
+                        show_notes=show_notes,
+                        show_code=show_code,
+                        show_result=show_result
+                    )
+
+                    if section_text:
+                        combined_lines.append(section_text)
+                        combined_lines.append("")
+            else:
+                group = grouped_sections[selected_section_id]
+                rows = get_sorted_section_rows(group["rows"])
+
+                if show_headers:
+                    combined_lines.append(f"# ===== {selected_section_id} | {group['topic']} - {group['concept']} =====")
+                    combined_lines.append("")
+
+                section_text = build_review_view_text(
+                    section_rows=rows,
+                    show_setup=show_setup,
+                    show_instruction=show_instruction,
+                    show_notes=show_notes,
+                    show_code=show_code,
+                    show_result=show_result
+                )
+
+                if section_text:
+                    combined_lines.append(section_text)
+
+            review_text = "\n".join(combined_lines).strip()
 
             st.code(review_text, language="python")
 
     except Exception as e:
         st.error(f"Error loading review viewer: {e}")
+        
