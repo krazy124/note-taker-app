@@ -40,19 +40,22 @@ def connect_to_sheet():
 def get_next_section_id():
 
     worksheet = connect_to_sheet()
-
     values = worksheet.col_values(1)
 
-    values = values[1:]  # remove header
-
-    if not values:
+    if len(values) <= 1:
         return "s1"
 
-    last = values[-1]
+    data_rows = values[1:]  # skip header
 
-    num = int(last.replace("s", ""))
+    for value in reversed(data_rows):
+        cleaned = str(value).strip().lower()
 
-    return f"s{num+1}"
+        if cleaned.startswith("s") and cleaned[1:].isdigit():
+            num = int(cleaned[1:])
+            return f"s{num + 1}"
+
+    return "s1"
+
 
 
 # =========================
