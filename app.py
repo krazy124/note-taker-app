@@ -455,7 +455,6 @@ with tab2:
 
     st.text_area(
         "Separated",
-        value=st.session_state.separated_text,
-        height=350,
-        key="separated_output"
+        st.session_state.separated_text,
+        height=350
     )
