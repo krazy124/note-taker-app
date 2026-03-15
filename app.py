@@ -99,69 +99,39 @@ def add_example():
 # =========================
 # Compile Block
 # =========================
-def compile_block(section_name, concept):
-    block = ""
-    active_setup = ""
-    runtime_env = {}
-    example_rows = []
+def save_block_and_examples(section_name, concept):
+    review_sheet = connect_to_review_sheet()
+    example_sheet = connect_to_example_sheet()
 
-    for ex in st.session_state.examples:
-        stdout_buffer = io.StringIO()
-        result = ""
+    section_id = get_next_section_id()
 
-        if ex["setup"]:
-            active_setup = ex["setup"]
-            block += "# Setup:\n"
-            block += active_setup + "\n\n"
+    review_row = [
+        section_id,
+        section_name,
+        concept,
+        st.session_state.compiled_block
+    ]
 
-            try:
-                exec(active_setup, runtime_env)
-            except Exception as e:
-                result = f"Error: {e}"
+    review_sheet.append_row(review_row)
 
-        if not result:
-            try:
-                with contextlib.redirect_stdout(stdout_buffer):
-                    exec(ex["code"], runtime_env)
+    if st.session_state.example_rows:
+        rows_to_save = []
 
-                result = stdout_buffer.getvalue().strip()
+        for ex_row in st.session_state.example_rows:
+            rows_to_save.append([
+                section_id,
+                ex_row["section_order"],
+                ex_row["topic"],
+                ex_row["concept"],
+                ex_row["instruction"],
+                ex_row["code"],
+                ex_row["result"],
+                ex_row["notes"]
+            ])
 
-                if result == "":
-                    result = "No result"
+        example_sheet.append_rows(rows_to_save)
 
-            except Exception as e:
-                result = f"Error: {e}"
-
-        if ex["instruction"]:
-            block += f"# Instruction: {ex['instruction']}\n"
-
-        if ex["notes"]:
-            block += f"# Notes: {ex['notes']}\n"
-
-        block += ex["code"] + "\n"
-
-        if result:
-            single_line_result = result.replace("\n", " | ")
-            block += f"# Result: {single_line_result}\n"
-
-        block += "\n"
-
-        code_for_example_view = ""
-        if active_setup:
-            code_for_example_view += active_setup + "\n\n"
-        code_for_example_view += ex["code"]
-
-        example_rows.append([
-            section_name,
-            concept,
-            ex["instruction"],
-            code_for_example_view.strip(),
-            result,
-            ex["notes"]
-        ])
-
-    st.session_state.compiled_block = block
-    st.session_state.example_rows = example_rows
+    return section_id
 
 # =========================
 # Save Block + Examples
