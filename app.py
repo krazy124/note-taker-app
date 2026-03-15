@@ -1,7 +1,6 @@
 import io
 import csv
 import json
-import html
 import contextlib
 
 import streamlit as st
@@ -126,176 +125,55 @@ def get_sorted_section_rows(section_rows):
     return sorted(section_rows, key=row_order_key)
 
 
-def render_review_section_html(section_id, topic, concept, section_rows, show_setup, show_instruction, show_notes, show_code, show_result):
-    hide_setup_css = "display:none;" if not show_setup else ""
-    hide_instruction_css = "display:none;" if not show_instruction else ""
-    hide_notes_css = "display:none;" if not show_notes else ""
-    hide_code_css = "display:none;" if not show_code else ""
-    hide_result_css = "display:none;" if not show_result else ""
-
-    html_parts = [
-        f"""
-        <style>
-            .review-wrap {{
-                font-family: Arial, sans-serif;
-                margin-top: 0.5rem;
-            }}
-
-            .review-header {{
-                padding: 14px 16px;
-                border: 1px solid #d9d9d9;
-                border-radius: 10px;
-                background: #f8f9fb;
-                margin-bottom: 14px;
-            }}
-
-            .review-header h3 {{
-                margin: 0 0 6px 0;
-                font-size: 1.25rem;
-            }}
-
-            .review-meta {{
-                margin: 2px 0;
-                font-size: 0.95rem;
-            }}
-
-            .review-example {{
-                border: 1px solid #d9d9d9;
-                border-radius: 10px;
-                padding: 14px 16px;
-                margin-bottom: 14px;
-                background: white;
-            }}
-
-            .review-example-title {{
-                font-weight: bold;
-                margin-bottom: 10px;
-                font-size: 1rem;
-            }}
-
-            .setup-block {{
-                {hide_setup_css}
-                margin-bottom: 10px;
-            }}
-
-            .instruction-block {{
-                {hide_instruction_css}
-                margin-bottom: 8px;
-                font-weight: 600;
-            }}
-
-            .notes-block {{
-                {hide_notes_css}
-                margin-bottom: 10px;
-                color: #444;
-                font-style: italic;
-            }}
-
-            .code-block {{
-                {hide_code_css}
-                margin-bottom: 10px;
-            }}
-
-            .result-block {{
-                {hide_result_css}
-                margin-bottom: 0;
-            }}
-
-            .label {{
-                font-weight: 700;
-                margin-bottom: 4px;
-            }}
-
-            .code-pre {{
-                background: #f6f8fa;
-                border: 1px solid #e5e7eb;
-                border-radius: 8px;
-                padding: 10px 12px;
-                white-space: pre-wrap;
-                font-family: Consolas, monospace;
-                font-size: 0.92rem;
-                line-height: 1.4;
-                margin: 0;
-            }}
-        </style>
-
-        <div class="review-wrap">
-            <div class="review-header">
-                <h3>{html.escape(topic)} - {html.escape(concept)}</h3>
-                <div class="review-meta"><strong>Section ID:</strong> {html.escape(section_id)}</div>
-                <div class="review-meta"><strong>Topic:</strong> {html.escape(topic)}</div>
-                <div class="review-meta"><strong>Concept:</strong> {html.escape(concept)}</div>
-            </div>
-        """
-    ]
-
+# =========================
+# Build Review Viewer Text
+# =========================
+def build_review_view_text(section_rows, show_setup, show_instruction, show_notes, show_code, show_result):
+    lines = []
     previous_setup = None
 
     for row in section_rows:
-        section_order = clean_label_text(row.get("Section Order", ""))
+        full_code = str(row.get("Code", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
         instruction = str(row.get("Instruction", "")).strip()
-        full_code = str(row.get("Code", "")).rstrip()
-        result = str(row.get("Result", "")).rstrip()
         notes = str(row.get("Notes", "")).strip()
+        result = str(row.get("Result", "")).strip()
 
-        setup_text, code_text = split_setup_and_code(full_code)
+        setup_text = ""
+        code_text = full_code
 
-        show_setup_for_example = bool(setup_text) and setup_text != previous_setup
-        if setup_text:
+        if "\n\n" in full_code:
+            setup_text, code_text = full_code.split("\n\n", 1)
+            setup_text = setup_text.strip()
+            code_text = code_text.strip()
+
+        if show_setup and setup_text and setup_text != previous_setup:
+            lines.append("# Setup:")
+            lines.append(setup_text)
+            lines.append("")
+            previous_setup = setup_text
+        elif setup_text:
             previous_setup = setup_text
 
-        html_parts.append(f'<div class="review-example">')
-        html_parts.append(f'<div class="review-example-title">Example {html.escape(section_order)}</div>')
+        if show_instruction and instruction:
+            lines.append(f"# Instruction: {instruction}")
 
-        if show_setup_for_example:
-            html_parts.append(
-                f"""
-                <div class="setup-block">
-                    <div class="label">Setup</div>
-                    <pre class="code-pre">{html.escape(setup_text)}</pre>
-                </div>
-                """
-            )
+        if show_notes and notes:
+            lines.append(f"# Notes: {notes}")
 
-        html_parts.append(
-            f"""
-            <div class="instruction-block">
-                Instruction: {html.escape(instruction)}
-            </div>
-            """
-        )
+        if show_code and code_text:
+            lines.append(code_text)
 
-        if notes:
-            html_parts.append(
-                f"""
-                <div class="notes-block">
-                    Notes: {html.escape(notes)}
-                </div>
-                """
-            )
+        if show_result and result:
+            if "\n" in result:
+                lines.append("# Result:")
+                for result_line in result.splitlines():
+                    lines.append(f"# {result_line}")
+            else:
+                lines.append(f"# Result: {result}")
 
-        html_parts.append(
-            f"""
-            <div class="code-block">
-                <div class="label">Code</div>
-                <pre class="code-pre">{html.escape(code_text)}</pre>
-            </div>
-            """
-        )
+        lines.append("")
 
-        html_parts.append(
-            f"""
-            <div class="result-block">
-                <div class="label">Result</div>
-                <pre class="code-pre">{html.escape(result)}</pre>
-            </div>
-            """
-        )
-
-        html_parts.append("</div>")
-
-    html_parts.append("</div>")
-    return "".join(html_parts)
+    return "\n".join(lines).strip()
 
 
 # =========================
@@ -766,6 +644,9 @@ with tab3:
             selected_group = grouped_sections[selected_section_id]
             selected_rows = get_sorted_section_rows(selected_group["rows"])
 
+            st.markdown(f"### {selected_group['topic']} - {selected_group['concept']}")
+            st.caption(f"Section ID: {selected_section_id}")
+
             col1, col2, col3, col4, col5 = st.columns(5)
 
             with col1:
@@ -783,10 +664,7 @@ with tab3:
             with col5:
                 show_result = st.checkbox("Result", value=True)
 
-            rendered_html = render_review_section_html(
-                section_id=selected_section_id,
-                topic=selected_group["topic"],
-                concept=selected_group["concept"],
+            review_text = build_review_view_text(
                 section_rows=selected_rows,
                 show_setup=show_setup,
                 show_instruction=show_instruction,
@@ -795,7 +673,7 @@ with tab3:
                 show_result=show_result
             )
 
-            st.markdown(rendered_html, unsafe_allow_html=True)
+            st.code(review_text, language="python")
 
     except Exception as e:
         st.error(f"Error loading review viewer: {e}")
