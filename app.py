@@ -130,8 +130,8 @@ def compile_block(section_name, concept):
                 if result == "":
                     result = "No result"
     
-                except Exception:
-                    result = traceback.format_exc().strip()
+            except Exception:
+                result = traceback.format_exc().strip()
 
         if ex["instruction"]:
             block += f"# Instruction: {ex['instruction']}\n"
