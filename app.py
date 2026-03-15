@@ -123,11 +123,15 @@ def compile_block(section_name, concept):
             try:
                 with contextlib.redirect_stdout(stdout_buffer):
                     exec(ex["code"], runtime_env)
-
+                
                 result = stdout_buffer.getvalue().strip()
-
-            except Exception:
-                result = traceback.format_exc().strip()
+                
+                # If nothing was printed, treat it as a valid case
+                if result == "":
+                    result = "No result"
+    
+                except Exception:
+                    result = traceback.format_exc().strip()
 
         if ex["instruction"]:
             block += f"# Instruction: {ex['instruction']}\n"
