@@ -94,31 +94,35 @@ def add_example():
 def compile_block(section_name, concept):
 
     block = ""
+    active_setup = ""
 
     for ex in st.session_state.examples:
 
         stdout_buffer = io.StringIO()
 
+        # determine which setup to use
+        if ex["setup"]:
+            active_setup = ex["setup"]
+
+            block += "# Setup:\n"
+            block += active_setup + "\n\n"
+
         try:
 
             full_code = ""
 
-            if ex["setup"]:
-                full_code += ex["setup"] + "\n"
+            if active_setup:
+                full_code += active_setup + "\n"
 
             full_code += ex["code"]
 
             with contextlib.redirect_stdout(stdout_buffer):
                 exec(full_code, {})
 
-            result = stdout_buffer.getvalue()
+            result = stdout_buffer.getvalue().strip()
 
         except Exception:
             result = traceback.format_exc()
-
-        if ex["setup"]:
-            block += "# Setup:\n"
-            block += ex["setup"] + "\n\n"
 
         if ex["instruction"]:
             block += f"# Instruction: {ex['instruction']}\n"
@@ -126,16 +130,12 @@ def compile_block(section_name, concept):
         if ex["notes"]:
             block += f"# Notes: {ex['notes']}\n"
 
-        block += ex["code"] + "\n\n"
+        block += ex["code"] + "\n"
 
         if result:
+            block += f"# Result: {result}\n"
 
-            block += "# Result:\n"
-
-            for line in result.splitlines():
-                block += "# " + line + "\n"
-
-            block += "\n"
+        block += "\n"
 
     st.session_state.compiled_block = block
 
