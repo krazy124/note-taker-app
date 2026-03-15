@@ -95,29 +95,26 @@ def compile_block(section_name, concept):
 
     block = ""
     active_setup = ""
+    runtime_env = {}   # shared environment across examples
 
     for ex in st.session_state.examples:
 
         stdout_buffer = io.StringIO()
 
-        # determine which setup to use
+        # update setup if new one is provided
         if ex["setup"]:
             active_setup = ex["setup"]
 
             block += "# Setup:\n"
             block += active_setup + "\n\n"
 
+            # run setup once to initialize environment
+            exec(active_setup, runtime_env)
+
         try:
 
-            full_code = ""
-
-            if active_setup:
-                full_code += active_setup + "\n"
-
-            full_code += ex["code"]
-
             with contextlib.redirect_stdout(stdout_buffer):
-                exec(full_code, {})
+                exec(ex["code"], runtime_env)
 
             result = stdout_buffer.getvalue().strip()
 
@@ -138,6 +135,7 @@ def compile_block(section_name, concept):
         block += "\n"
 
     st.session_state.compiled_block = block
+
 
 
 
