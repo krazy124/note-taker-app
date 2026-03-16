@@ -2,6 +2,7 @@ import io
 import csv
 import json
 import contextlib
+from datetime import datetime
 
 import streamlit as st
 from streamlit_ace import st_ace
@@ -90,13 +91,41 @@ def section_sort_key(section_id):
     return 999999
 
 
-def get_example_sections():
+def row_matches_search(record, search_text, search_mode):
+    if not search_text.strip():
+        return True
+
+    search_value = search_text.strip().lower()
+
+    searchable_fields = {
+        "Section ID": clean_label_text(record.get("Section ID", "")),
+        "Topic": clean_label_text(record.get("Topic", "")),
+        "Concept": clean_label_text(record.get("Concept", "")),
+        "Instruction": str(record.get("Instruction", "")).strip(),
+        "Code": str(record.get("Code", "")).strip(),
+        "Result": str(record.get("Result", "")).strip(),
+        "Notes": str(record.get("Notes", "")).strip(),
+        "Created At": str(record.get("Created At", "")).strip(),
+    }
+
+    if search_mode == "Anywhere":
+        combined_text = " ".join(searchable_fields.values()).lower()
+        return search_value in combined_text
+
+    field_value = searchable_fields.get(search_mode, "")
+    return search_value in field_value.lower()
+
+
+def get_example_sections(search_text="", search_mode="Anywhere"):
     worksheet = connect_to_example_sheet()
     records = worksheet.get_all_records()
 
     grouped = {}
 
     for record in records:
+        if not row_matches_search(record, search_text, search_mode):
+            continue
+
         section_id = clean_label_text(record.get("Section ID", ""))
         topic = clean_label_text(record.get("Topic", ""))
         concept = clean_label_text(record.get("Concept", ""))
@@ -292,6 +321,7 @@ def save_block_and_examples(section_name, concept):
     example_sheet = connect_to_example_sheet()
 
     section_id = get_next_section_id()
+    created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     review_row = [
         section_id,
@@ -315,6 +345,7 @@ def save_block_and_examples(section_name, concept):
                 ex_row[4],  # Code
                 ex_row[5],  # Result
                 ex_row[6],  # Notes
+                created_at,  # Created At
             ])
 
         example_sheet.append_rows(rows_to_save)
@@ -632,10 +663,37 @@ with tab3:
     st.subheader("Review Viewer")
 
     try:
-        section_ids, grouped_sections = get_example_sections()
+        st.markdown("### Search")
+
+        search_col1, search_col2 = st.columns([2, 1])
+
+        with search_col1:
+            search_text = st.text_input("Search Text", value="")
+
+        with search_col2:
+            search_mode = st.selectbox(
+                "Search In",
+                options=[
+                    "Anywhere",
+                    "Section ID",
+                    "Topic",
+                    "Concept",
+                    "Instruction",
+                    "Code",
+                    "Result",
+                    "Notes",
+                    "Created At",
+                ],
+                index=0
+            )
+
+        section_ids, grouped_sections = get_example_sections(
+            search_text=search_text,
+            search_mode=search_mode
+        )
 
         if not section_ids:
-            st.info("No Example View rows found yet.")
+            st.info("No Example View rows found for the current search.")
         else:
             selected_section_id = st.selectbox(
                 "Select Section ID",
@@ -720,4 +778,3 @@ with tab3:
 
     except Exception as e:
         st.error(f"Error loading review viewer: {e}")
-        
