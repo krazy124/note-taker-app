@@ -201,7 +201,7 @@ def build_review_view_text(section_rows, show_setup, show_instruction, show_note
                 lines.append(f"# Result: {result}")
 
         if index < len(section_rows) - 1:
-            lines.append("# __________________________________________________")
+            lines.append("__________________________________________________")
             lines.append("")
 
     return "\n".join(lines).strip()
