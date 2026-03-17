@@ -663,14 +663,11 @@ with tab3:
     st.subheader("Review Viewer")
 
     try:
-        st.markdown("### Search")
+        with st.sidebar:
+            st.subheader("Review Viewer Controls")
 
-        search_col1, search_col2 = st.columns([2, 1])
-
-        with search_col1:
             search_text = st.text_input("Search Text", value="")
 
-        with search_col2:
             search_mode = st.selectbox(
                 "Search In",
                 options=[
@@ -687,20 +684,30 @@ with tab3:
                 index=0
             )
 
-        section_ids, grouped_sections = get_example_sections(
-            search_text=search_text,
-            search_mode=search_mode
-        )
+            section_ids, grouped_sections = get_example_sections(
+                search_text=search_text,
+                search_mode=search_mode
+            )
+
+            if section_ids:
+                selected_section_id = st.selectbox(
+                    "Select Section ID",
+                    options=["All Sections"] + section_ids,
+                    format_func=lambda sid: "All Sections" if sid == "All Sections" else f"{sid} - {grouped_sections[sid]['topic']} - {grouped_sections[sid]['concept']}"
+                )
+            else:
+                selected_section_id = "All Sections"
+
+            show_headers = st.checkbox("Headers", value=True)
+            show_setup = st.checkbox("Setup", value=True)
+            show_instruction = st.checkbox("Instruction", value=True)
+            show_notes = st.checkbox("Notes", value=True)
+            show_code = st.checkbox("Code", value=True)
+            show_result = st.checkbox("Result", value=True)
 
         if not section_ids:
             st.info("No Example View rows found for the current search.")
         else:
-            selected_section_id = st.selectbox(
-                "Select Section ID",
-                options=["All Sections"] + section_ids,
-                format_func=lambda sid: "All Sections" if sid == "All Sections" else f"{sid} - {grouped_sections[sid]['topic']} - {grouped_sections[sid]['concept']}"
-            )
-
             if selected_section_id == "All Sections":
                 st.markdown("### All Sections")
                 st.caption(f"Total Sections: {len(section_ids)}")
@@ -709,32 +716,15 @@ with tab3:
                 st.markdown(f"### {selected_group['topic']} - {selected_group['concept']}")
                 st.caption(f"Section ID: {selected_section_id}")
 
-            col1, col2, col3, col4, col5, col6 = st.columns(6)
-
-            with col1:
-                show_headers = st.checkbox("Headers", value=True)
-
-            with col2:
-                show_setup = st.checkbox("Setup", value=True)
-
-            with col3:
-                show_instruction = st.checkbox("Instruction", value=True)
-
-            with col4:
-                show_notes = st.checkbox("Notes", value=True)
-
-            with col5:
-                show_code = st.checkbox("Code", value=True)
-
-            with col6:
-                show_result = st.checkbox("Result", value=True)
-
             combined_lines = []
 
             if selected_section_id == "All Sections":
                 for sid in section_ids:
                     group = grouped_sections[sid]
                     rows = get_sorted_section_rows(group["rows"])
+
+                    combined_lines.append("__________________________________________________")
+                    combined_lines.append("")
 
                     if show_headers:
                         combined_lines.append(f"# ===== {sid} | {group['topic']} - {group['concept']} =====")
@@ -755,6 +745,9 @@ with tab3:
             else:
                 group = grouped_sections[selected_section_id]
                 rows = get_sorted_section_rows(group["rows"])
+
+                combined_lines.append("__________________________________________________")
+                combined_lines.append("")
 
                 if show_headers:
                     combined_lines.append(f"# ===== {selected_section_id} | {group['topic']} - {group['concept']} =====")
