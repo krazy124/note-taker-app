@@ -32,11 +32,6 @@ def connect_to_spreadsheet():
     return spreadsheet
 
 
-def connect_to_review_sheet():
-    spreadsheet = connect_to_spreadsheet()
-    return spreadsheet.worksheet("New Review")
-
-
 def connect_to_example_sheet():
     spreadsheet = connect_to_spreadsheet()
     return spreadsheet.worksheet("Example View")
@@ -63,6 +58,7 @@ def get_next_section_id():
 
     return "s1"
 
+
 # =========================
 # Helpers
 # =========================
@@ -71,16 +67,6 @@ def clean_label_text(value):
     if text.startswith('"') and text.endswith('"') and len(text) >= 2:
         text = text[1:-1]
     return text.strip()
-
-
-def split_setup_and_code(full_code):
-    code_text = str(full_code).replace("\r\n", "\n").replace("\r", "\n").strip()
-
-    if "\n\n" in code_text:
-        setup_part, code_part = code_text.split("\n\n", 1)
-        return setup_part.strip(), code_part.strip()
-
-    return "", code_text
 
 
 def section_sort_key(section_id):
@@ -101,6 +87,7 @@ def row_matches_search(record, search_text, search_mode):
         "Topic": clean_label_text(record.get("Topic", "")),
         "Concept": clean_label_text(record.get("Concept", "")),
         "Instruction": str(record.get("Instruction", "")).strip(),
+        "Setup": str(record.get("Setup", "")).strip(),
         "Code": str(record.get("Code", "")).strip(),
         "Result": str(record.get("Result", "")).strip(),
         "Notes": str(record.get("Notes", "")).strip(),
@@ -158,29 +145,18 @@ def get_sorted_section_rows(section_rows):
 # =========================
 def build_review_view_text(section_rows, show_setup, show_instruction, show_notes, show_code, show_result):
     lines = []
-    previous_setup = None
 
     for index, row in enumerate(section_rows):
-        full_code = str(row.get("Code", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
+        setup_text = str(row.get("Setup", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
+        code_text = str(row.get("Code", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
         instruction = str(row.get("Instruction", "")).strip()
         notes = str(row.get("Notes", "")).strip()
         result = str(row.get("Result", "")).strip()
 
-        setup_text = ""
-        code_text = full_code
-
-        if "\n\n" in full_code:
-            setup_text, code_text = full_code.split("\n\n", 1)
-            setup_text = setup_text.strip()
-            code_text = code_text.strip()
-
-        if show_setup and setup_text and setup_text != previous_setup:
+        if show_setup and setup_text:
             lines.append("# Setup:")
             lines.append(setup_text)
             lines.append("")
-            previous_setup = setup_text
-        elif setup_text:
-            previous_setup = setup_text
 
         if show_instruction and instruction:
             lines.append(f"# Instruction: {instruction}")
@@ -296,19 +272,15 @@ def compile_block(section_name, concept):
 
         block += "\n"
 
-        code_for_example_view = ""
-        if current_setup:
-            code_for_example_view += current_setup + "\n\n"
-        code_for_example_view += current_code
-
         example_rows.append([
-            i,
-            section_name,
-            concept,
-            ex["instruction"],
-            code_for_example_view.strip(),
-            result,
-            ex["notes"]
+            i,                    # Section Order
+            section_name,         # Topic
+            concept,              # Concept
+            ex["instruction"],    # Instruction
+            current_setup,        # Setup
+            current_code,         # Code
+            result,               # Result
+            ex["notes"]           # Notes
         ])
 
     st.session_state.compiled_block = block
@@ -334,10 +306,11 @@ def save_block_and_examples(section_name, concept):
                 ex_row[1],  # Topic
                 ex_row[2],  # Concept
                 ex_row[3],  # Instruction
-                ex_row[4],  # Code
-                ex_row[5],  # Result
-                ex_row[6],  # Notes
-                created_at,  # Created At
+                ex_row[4],  # Setup
+                ex_row[5],  # Code
+                ex_row[6],  # Result
+                ex_row[7],  # Notes
+                created_at, # Created At
             ])
 
         example_sheet.append_rows(rows_to_save)
@@ -375,7 +348,8 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
         code_only = "\n".join(current_example["code_lines"]).rstrip()
 
         has_content = (
-            current_example["instruction"].strip()
+            current_example["setup"].strip()
+            or current_example["instruction"].strip()
             or current_example["notes"].strip()
             or current_example["result"].strip()
             or code_only.strip()
@@ -384,23 +358,14 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
         if not has_content:
             return
 
-        full_code = ""
-        if current_example["setup"].strip():
-            full_code += current_example["setup"].strip()
-
-        if current_example["setup"].strip() and code_only.strip():
-            full_code += "\n\n"
-
-        if code_only.strip():
-            full_code += code_only.strip()
-
         rows.append([
             str(section_id).strip(),
             len(rows) + 1,
             topic,
             concept,
             current_example["instruction"].strip(),
-            full_code.strip(),
+            current_example["setup"].strip(),
+            code_only.strip(),
             current_example["result"].strip(),
             current_example["notes"].strip(),
         ])
@@ -668,6 +633,7 @@ with tab3:
                     "Topic",
                     "Concept",
                     "Instruction",
+                    "Setup",
                     "Code",
                     "Result",
                     "Notes",
