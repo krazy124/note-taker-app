@@ -300,12 +300,13 @@ def compile_block(section_name, concept):
             block += "# Setup:\n"
             block += current_setup + "\n\n"
 
-            try:
+        try:
+            if current_setup:
                 exec(current_setup, runtime_env)
-            except Exception as e:
-                result = f"Error: {e}"
+        except Exception as e:
+            result = f"Setup Error: {e}"
 
-        if not result and current_code:
+        if not result:
             try:
                 with contextlib.redirect_stdout(stdout_buffer):
                     exec(current_code, runtime_env)
@@ -316,9 +317,7 @@ def compile_block(section_name, concept):
                     result = "No result"
 
             except Exception as e:
-                result = f"Error: {e}"
-        elif not result and not current_code:
-            result = "No result"
+                result = f"Code Error: {e}"
 
         if ex["instruction"]:
             block += f"# Instruction: {ex['instruction']}\n"
