@@ -249,28 +249,28 @@ def add_example():
 # =========================
 def compile_block(section_name, concept):
     block = ""
-    active_setup = ""
-    runtime_env = {}
     example_rows = []
 
     for i, ex in enumerate(st.session_state.examples, start=1):
         stdout_buffer = io.StringIO()
         result = ""
+        current_setup = ex["setup"].strip()
+        current_code = ex["code"].strip()
+        runtime_env = {}
 
-        if ex["setup"]:
-            active_setup = ex["setup"]
+        if current_setup:
             block += "# Setup:\n"
-            block += active_setup + "\n\n"
+            block += current_setup + "\n\n"
 
             try:
-                exec(active_setup, runtime_env)
+                exec(current_setup, runtime_env)
             except Exception as e:
                 result = f"Error: {e}"
 
-        if not result:
+        if not result and current_code:
             try:
                 with contextlib.redirect_stdout(stdout_buffer):
-                    exec(ex["code"], runtime_env)
+                    exec(current_code, runtime_env)
 
                 result = stdout_buffer.getvalue().strip()
 
@@ -279,6 +279,8 @@ def compile_block(section_name, concept):
 
             except Exception as e:
                 result = f"Error: {e}"
+        elif not result and not current_code:
+            result = "No result"
 
         if ex["instruction"]:
             block += f"# Instruction: {ex['instruction']}\n"
@@ -286,7 +288,8 @@ def compile_block(section_name, concept):
         if ex["notes"]:
             block += f"# Notes: {ex['notes']}\n"
 
-        block += ex["code"] + "\n"
+        if current_code:
+            block += current_code + "\n"
 
         if result:
             single_line_result = result.replace("\n", " | ")
@@ -295,9 +298,9 @@ def compile_block(section_name, concept):
         block += "\n"
 
         code_for_example_view = ""
-        if active_setup:
-            code_for_example_view += active_setup + "\n\n"
-        code_for_example_view += ex["code"]
+        if current_setup:
+            code_for_example_view += current_setup + "\n\n"
+        code_for_example_view += current_code
 
         example_rows.append([
             i,
