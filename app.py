@@ -14,6 +14,69 @@ st.set_page_config(page_title="Python Review Block Builder", layout="wide")
 
 
 # =========================
+# Custom Styling
+# =========================
+st.markdown(
+    """
+    <style>
+    .block-container {
+        padding-top: 1.2rem;
+        padding-bottom: 1.5rem;
+        padding-left: 1rem;
+        padding-right: 1rem;
+        max-width: 1200px;
+    }
+
+    h1, h2, h3 {
+        margin-bottom: 0.35rem;
+    }
+
+    div[data-testid="stTextInput"] label,
+    div[data-testid="stTextArea"] label,
+    div[data-testid="stSelectbox"] label {
+        font-weight: 600;
+    }
+
+    div[data-testid="stButton"] > button {
+        width: 100%;
+        border-radius: 10px;
+        padding-top: 0.65rem;
+        padding-bottom: 0.65rem;
+        font-weight: 600;
+    }
+
+    div[data-testid="stCodeBlock"] {
+        border-radius: 12px;
+    }
+
+    .example-card-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin-top: 0.25rem;
+        margin-bottom: 0.6rem;
+    }
+
+    .small-muted {
+        color: #888;
+        font-size: 0.92rem;
+        margin-top: -0.15rem;
+        margin-bottom: 0.75rem;
+    }
+
+    @media (max-width: 768px) {
+        .block-container {
+            padding-left: 0.7rem;
+            padding-right: 0.7rem;
+            padding-top: 0.8rem;
+        }
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# =========================
 # Google Sheets Connection
 # =========================
 def connect_to_spreadsheet():
@@ -471,55 +534,83 @@ def rows_to_tsv(rows):
 # App UI
 # =========================
 st.title("Python Review Block Builder")
+st.markdown('<div class="small-muted">Spreadsheet-style layout, but friendlier to code and mobile screens.</div>', unsafe_allow_html=True)
 
 tab1, tab2, tab3 = st.tabs(["Build Review Block", "Separate Existing Block", "Review Viewer"])
 
 
 with tab1:
     st.subheader("Section Information")
-    section_name = st.text_input("Section Name")
-    concept = st.text_input("Concept")
+
+    top_col1, top_col2 = st.columns(2)
+
+    with top_col1:
+        section_name = st.text_input("Section Name")
+
+    with top_col2:
+        concept = st.text_input("Concept")
+
+    st.markdown("---")
 
     for i in range(len(st.session_state.examples)):
         ex = st.session_state.examples[i]
 
-        st.markdown(f"### Example {i+1}")
+        with st.container(border=True):
+            st.markdown(
+                f'<div class="example-card-title">Example {i+1}</div>',
+                unsafe_allow_html=True
+            )
 
-        ex["setup"] = st.text_area(
-            "Setup",
-            value=ex["setup"],
-            key=f"setup_{i}"
+            row1_col1, row1_col2 = st.columns(2)
+
+            with row1_col1:
+                ex["instruction"] = st.text_area(
+                    "Instruction",
+                    value=ex["instruction"],
+                    key=f"instruction_{i}",
+                    height=120
+                )
+
+            with row1_col2:
+                ex["notes"] = st.text_area(
+                    "Notes",
+                    value=ex["notes"],
+                    key=f"notes_{i}",
+                    height=120
+                )
+
+            ex["setup"] = st.text_area(
+                "Setup",
+                value=ex["setup"],
+                key=f"setup_{i}",
+                height=140
+            )
+
+            code_value = st_ace(
+                value=ex["code"],
+                language="python",
+                theme="monokai",
+                key=f"code_{i}",
+                height=260
+            )
+
+            ex["code"] = code_value if code_value else ""
+
+            st.markdown("")
+
+    action_col1, action_col2 = st.columns([1, 1])
+
+    with action_col1:
+        st.button("Insert Another Example", on_click=add_example, use_container_width=True)
+
+    with action_col2:
+        st.button(
+            "Compile Block",
+            on_click=lambda: compile_block(section_name, concept),
+            use_container_width=True
         )
 
-        ex["instruction"] = st.text_area(
-            "Instruction",
-            value=ex["instruction"],
-            key=f"instruction_{i}"
-        )
-
-        ex["notes"] = st.text_area(
-            "Notes",
-            value=ex["notes"],
-            key=f"notes_{i}"
-        )
-
-        code_value = st_ace(
-            value=ex["code"],
-            language="python",
-            theme="monokai",
-            key=f"code_{i}",
-            height=250
-        )
-
-        ex["code"] = code_value if code_value else ""
-
-    st.button("Insert Another Example", on_click=add_example)
-
-    st.button(
-        "Compile Block",
-        on_click=lambda: compile_block(section_name, concept)
-    )
-
+    st.markdown("---")
     st.subheader("Compiled Block Preview")
     st.code(st.session_state.compiled_block, language="python")
 
@@ -536,9 +627,14 @@ with tab1:
 with tab2:
     st.subheader("Separate Existing Block Content")
 
-    separate_section_id = st.text_input("Section ID", key="separate_section_id")
-    separate_topic = st.text_input("Topic", key="separate_topic")
-    separate_concept = st.text_input("Concept", key="separate_concept")
+    info_col1, info_col2 = st.columns(2)
+
+    with info_col1:
+        separate_section_id = st.text_input("Section ID", key="separate_section_id")
+        separate_topic = st.text_input("Topic", key="separate_topic")
+
+    with info_col2:
+        separate_concept = st.text_input("Concept", key="separate_concept")
 
     block_content_input = st.text_area(
         "Block Content",
@@ -549,7 +645,7 @@ with tab2:
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button("Separate", key="separate_button"):
+        if st.button("Separate", key="separate_button", use_container_width=True):
             separated_rows = parse_block_content_to_rows(
                 section_id=separate_section_id,
                 topic=separate_topic,
@@ -567,12 +663,13 @@ with tab2:
                     id="copy-btn"
                     style="
                         width: 100%;
-                        padding: 0.6rem 1rem;
+                        padding: 0.7rem 1rem;
                         border: 1px solid #666;
-                        border-radius: 0.5rem;
+                        border-radius: 0.6rem;
                         background: #f5f5f5;
                         cursor: pointer;
                         font-size: 1rem;
+                        font-weight: 600;
                     "
                 >
                     Copy Separated
@@ -606,7 +703,7 @@ with tab2:
             }});
             </script>
             """,
-            height=80,
+            height=85,
         )
 
     st.text_area(
