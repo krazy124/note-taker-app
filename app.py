@@ -46,7 +46,7 @@ def connect_to_example_sheet():
 # Section ID Generator
 # =========================
 def get_next_section_id():
-    worksheet = connect_to_review_sheet()
+    worksheet = connect_to_example_sheet()
     values = worksheet.col_values(1)
 
     if len(values) <= 1:
@@ -62,7 +62,6 @@ def get_next_section_id():
             return f"s{num + 1}"
 
     return "s1"
-
 
 # =========================
 # Helpers
@@ -317,23 +316,13 @@ def compile_block(section_name, concept):
 
 
 # =========================
-# Save Block + Examples
+# Save Examples Only
 # =========================
 def save_block_and_examples(section_name, concept):
-    review_sheet = connect_to_review_sheet()
     example_sheet = connect_to_example_sheet()
 
     section_id = get_next_section_id()
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    review_row = [
-        section_id,
-        section_name,
-        concept,
-        st.session_state.compiled_block
-    ]
-
-    review_sheet.append_row(review_row)
 
     if st.session_state.example_rows:
         rows_to_save = []
