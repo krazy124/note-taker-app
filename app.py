@@ -603,11 +603,8 @@ with tab1:
         st.button("Insert Another Example", on_click=add_example, use_container_width=True)
 
     with action_col2:
-        st.button(
-            "Compile Block",
-            on_click=lambda: compile_block(section_name, concept),
-            use_container_width=True
-        )
+        if st.button("Compile Block", use_container_width=True):
+            compile_block(section_name, concept)
 
     st.markdown("---")
     st.subheader("Compiled Block Preview")
