@@ -214,36 +214,36 @@ def safe_rerun():
 # =========================
 # Voice Helpers
 # =========================
-def render_voice_component(component_key):
-    html = f"""
+def render_voice_component():
+    html = """
     <!DOCTYPE html>
     <html>
     <head>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <script src="https://unpkg.com/streamlit-component-lib@1.4.0/dist/index.js"></script>
         <style>
-            body {{
+            body {
                 margin: 0;
                 padding: 0;
                 font-family: Arial, sans-serif;
                 background: transparent;
-            }}
+            }
 
-            .voice-wrap {{
+            .voice-wrap {
                 border: 1px solid #d0d0d0;
                 border-radius: 12px;
                 padding: 12px;
                 background: #fafafa;
-            }}
+            }
 
-            .voice-row {{
+            .voice-row {
                 display: flex;
                 gap: 8px;
                 flex-wrap: wrap;
                 margin-bottom: 10px;
-            }}
+            }
 
-            button {{
+            button {
                 border: 1px solid #666;
                 background: white;
                 border-radius: 10px;
@@ -251,31 +251,31 @@ def render_voice_component(component_key):
                 cursor: pointer;
                 font-weight: 600;
                 font-size: 14px;
-            }}
+            }
 
-            button:hover {{
+            button:hover {
                 background: #f1f1f1;
-            }}
+            }
 
-            .status {{
+            .status {
                 font-size: 14px;
                 margin-bottom: 8px;
                 font-weight: 600;
-            }}
+            }
 
-            .status.listening {{
+            .status.listening {
                 color: #0a7d1c;
-            }}
+            }
 
-            .status.idle {{
+            .status.idle {
                 color: #666;
-            }}
+            }
 
-            .status.error {{
+            .status.error {
                 color: #b42318;
-            }}
+            }
 
-            textarea {{
+            textarea {
                 width: 100%;
                 min-height: 140px;
                 resize: vertical;
@@ -285,13 +285,13 @@ def render_voice_component(component_key):
                 font-size: 15px;
                 box-sizing: border-box;
                 font-family: Arial, sans-serif;
-            }}
+            }
 
-            .small {{
+            .small {
                 margin-top: 8px;
                 font-size: 12px;
                 color: #666;
-            }}
+            }
         </style>
     </head>
     <body>
@@ -326,124 +326,136 @@ def render_voice_component(component_key):
             let isListening = false;
             let lastError = "";
 
-            function sendValue() {{
-                Streamlit.setComponentValue({{
-                    transcript: finalTranscript,
-                    interim: interimTranscript,
-                    is_listening: isListening,
-                    supported: !!SpeechRecognition,
-                    error: lastError,
-                    ts: Date.now()
-                }});
-            }}
+            function sendValue() {
+                try {
+                    Streamlit.setComponentValue({
+                        transcript: finalTranscript,
+                        interim: interimTranscript,
+                        is_listening: isListening,
+                        supported: !!SpeechRecognition,
+                        error: lastError,
+                        ts: Date.now()
+                    });
+                } catch (err) {
+                }
+            }
 
-            function setStatus(text, cls) {{
+            function setStatus(text, cls) {
                 statusEl.textContent = text;
                 statusEl.className = "status " + cls;
-            }}
+            }
 
-            function refreshBox() {{
+            function refreshBox() {
                 const combined = [finalTranscript, interimTranscript].filter(Boolean).join(" ").trim();
                 transcriptBox.value = combined;
-            }}
+            }
 
-            function syncTypedBoxToFinal() {{
+            function syncTypedBoxToFinal() {
                 finalTranscript = transcriptBox.value;
                 interimTranscript = "";
                 sendValue();
-            }}
+            }
 
             transcriptBox.addEventListener("input", syncTypedBoxToFinal);
 
-            function init() {{
-                Streamlit.setFrameHeight(260);
+            function init() {
+                try {
+                    Streamlit.setFrameHeight(260);
+                } catch (err) {
+                }
 
-                if (!SpeechRecognition) {{
+                if (!SpeechRecognition) {
                     setStatus("Status: Speech recognition not supported in this browser", "error");
                     sendValue();
                     return;
-                }}
+                }
 
                 recognition = new SpeechRecognition();
                 recognition.continuous = true;
                 recognition.interimResults = true;
                 recognition.lang = "en-US";
 
-                recognition.onstart = function() {{
+                recognition.onstart = function() {
                     isListening = true;
                     lastError = "";
                     setStatus("Status: Listening...", "listening");
                     sendValue();
-                }};
+                };
 
-                recognition.onresult = function(event) {{
+                recognition.onresult = function(event) {
                     interimTranscript = "";
 
-                    for (let i = event.resultIndex; i < event.results.length; i++) {{
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
                         const chunk = event.results[i][0].transcript.trim();
 
-                        if (event.results[i].isFinal) {{
+                        if (event.results[i].isFinal) {
                             finalTranscript = (finalTranscript + " " + chunk).trim();
-                        }} else {{
+                        } else {
                             interimTranscript = (interimTranscript + " " + chunk).trim();
-                        }}
-                    }}
+                        }
+                    }
 
                     refreshBox();
                     sendValue();
-                }};
+                };
 
-                recognition.onerror = function(event) {{
+                recognition.onerror = function(event) {
                     lastError = event.error || "unknown_error";
                     isListening = false;
                     setStatus("Status: Error - " + lastError, "error");
                     sendValue();
-                }};
+                };
 
-                recognition.onend = function() {{
+                recognition.onend = function() {
                     isListening = false;
                     interimTranscript = "";
                     refreshBox();
                     setStatus("Status: Idle", "idle");
                     sendValue();
-                }};
+                };
 
-                startBtn.addEventListener("click", function() {{
-                    try {{
+                startBtn.addEventListener("click", function() {
+                    try {
                         recognition.start();
-                    }} catch (err) {{}}
-                }});
+                    } catch (err) {
+                    }
+                });
 
-                stopBtn.addEventListener("click", function() {{
-                    try {{
+                stopBtn.addEventListener("click", function() {
+                    try {
                         recognition.stop();
-                    }} catch (err) {{}}
-                }});
+                    } catch (err) {
+                    }
+                });
 
-                clearBtn.addEventListener("click", function() {{
+                clearBtn.addEventListener("click", function() {
                     finalTranscript = "";
                     interimTranscript = "";
                     lastError = "";
                     refreshBox();
                     setStatus("Status: Idle", "idle");
                     sendValue();
-                }});
+                });
 
                 sendValue();
-            }}
+            }
 
-            function onRender(event) {{
+            function onRender(event) {
                 init();
-            }}
+            }
 
-            Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);
-            Streamlit.setComponentReady();
-            Streamlit.setFrameHeight(260);
+            try {
+                Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);
+                Streamlit.setComponentReady();
+                Streamlit.setFrameHeight(260);
+            } catch (err) {
+                init();
+            }
         </script>
     </body>
     </html>
     """
-    return components.html(html, height=260, key=component_key)
+    return components.html(html, height=260)
 
 
 def append_text(existing_text, incoming_text):
@@ -647,14 +659,14 @@ def compile_block(section_name, concept):
         block += "\n"
 
         example_rows.append([
-            i,                    # Section Order
-            section_name,         # Topic
-            concept,              # Concept
-            ex["instruction"],    # Instruction
-            current_setup,        # Setup
-            current_code,         # Code
-            result,               # Result
-            ex["notes"]           # Notes
+            i,
+            section_name,
+            concept,
+            ex["instruction"],
+            current_setup,
+            current_code,
+            result,
+            ex["notes"]
         ])
 
     st.session_state.compiled_block = block
@@ -676,15 +688,15 @@ def save_block_and_examples(section_name, concept):
         for ex_row in st.session_state.example_rows:
             rows_to_save.append([
                 section_id,
-                ex_row[0],  # Section Order
-                ex_row[1],  # Topic
-                ex_row[2],  # Concept
-                ex_row[3],  # Instruction
-                ex_row[4],  # Setup
-                ex_row[5],  # Code
-                ex_row[6],  # Result
-                ex_row[7],  # Notes
-                created_at, # Created At
+                ex_row[0],
+                ex_row[1],
+                ex_row[2],
+                ex_row[3],
+                ex_row[4],
+                ex_row[5],
+                ex_row[6],
+                ex_row[7],
+                created_at,
             ])
 
         example_sheet.append_rows(rows_to_save)
@@ -897,7 +909,7 @@ with tab1:
         )
         st.session_state.voice_target_field = field_map[selected_field_label]
 
-    voice_payload = render_voice_component("voice_phase1_component")
+    voice_payload = render_voice_component()
 
     if isinstance(voice_payload, dict):
         st.session_state.voice_transcript = str(voice_payload.get("transcript", "") or "")
@@ -1228,3 +1240,4 @@ with tab3:
 
     except Exception as e:
         st.error(f"Error loading review viewer: {e}")
+
