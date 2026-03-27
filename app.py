@@ -5,6 +5,7 @@ import contextlib
 from datetime import datetime
 
 import streamlit as st
+import streamlit.components.v1 as components
 from streamlit_ace import st_ace
 import gspread
 from google.oauth2.service_account import Credentials
@@ -203,6 +204,293 @@ def get_sorted_section_rows(section_rows):
     return sorted(section_rows, key=row_order_key)
 
 
+def safe_rerun():
+    if hasattr(st, "rerun"):
+        st.rerun()
+    elif hasattr(st, "experimental_rerun"):
+        st.experimental_rerun()
+
+
+# =========================
+# Voice Helpers
+# =========================
+def render_voice_component(component_key):
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <script src="https://unpkg.com/streamlit-component-lib@1.4.0/dist/index.js"></script>
+        <style>
+            body {{
+                margin: 0;
+                padding: 0;
+                font-family: Arial, sans-serif;
+                background: transparent;
+            }}
+
+            .voice-wrap {{
+                border: 1px solid #d0d0d0;
+                border-radius: 12px;
+                padding: 12px;
+                background: #fafafa;
+            }}
+
+            .voice-row {{
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                margin-bottom: 10px;
+            }}
+
+            button {{
+                border: 1px solid #666;
+                background: white;
+                border-radius: 10px;
+                padding: 10px 14px;
+                cursor: pointer;
+                font-weight: 600;
+                font-size: 14px;
+            }}
+
+            button:hover {{
+                background: #f1f1f1;
+            }}
+
+            .status {{
+                font-size: 14px;
+                margin-bottom: 8px;
+                font-weight: 600;
+            }}
+
+            .status.listening {{
+                color: #0a7d1c;
+            }}
+
+            .status.idle {{
+                color: #666;
+            }}
+
+            .status.error {{
+                color: #b42318;
+            }}
+
+            textarea {{
+                width: 100%;
+                min-height: 140px;
+                resize: vertical;
+                border-radius: 10px;
+                border: 1px solid #c8c8c8;
+                padding: 10px;
+                font-size: 15px;
+                box-sizing: border-box;
+                font-family: Arial, sans-serif;
+            }}
+
+            .small {{
+                margin-top: 8px;
+                font-size: 12px;
+                color: #666;
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="voice-wrap">
+            <div id="status" class="status idle">Status: Idle</div>
+
+            <div class="voice-row">
+                <button id="startBtn">Start Listening</button>
+                <button id="stopBtn">Stop Listening</button>
+                <button id="clearBtn">Clear Transcript</button>
+            </div>
+
+            <textarea id="transcriptBox" placeholder="Voice transcript will appear here..."></textarea>
+
+            <div class="small">
+                Uses your browser's built-in speech recognition. Best for Phase 1 plain dictation.
+            </div>
+        </div>
+
+        <script>
+            const transcriptBox = document.getElementById("transcriptBox");
+            const statusEl = document.getElementById("status");
+            const startBtn = document.getElementById("startBtn");
+            const stopBtn = document.getElementById("stopBtn");
+            const clearBtn = document.getElementById("clearBtn");
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+            let recognition = null;
+            let finalTranscript = "";
+            let interimTranscript = "";
+            let isListening = false;
+            let lastError = "";
+
+            function sendValue() {{
+                Streamlit.setComponentValue({{
+                    transcript: finalTranscript,
+                    interim: interimTranscript,
+                    is_listening: isListening,
+                    supported: !!SpeechRecognition,
+                    error: lastError,
+                    ts: Date.now()
+                }});
+            }}
+
+            function setStatus(text, cls) {{
+                statusEl.textContent = text;
+                statusEl.className = "status " + cls;
+            }}
+
+            function refreshBox() {{
+                const combined = [finalTranscript, interimTranscript].filter(Boolean).join(" ").trim();
+                transcriptBox.value = combined;
+            }}
+
+            function syncTypedBoxToFinal() {{
+                finalTranscript = transcriptBox.value;
+                interimTranscript = "";
+                sendValue();
+            }}
+
+            transcriptBox.addEventListener("input", syncTypedBoxToFinal);
+
+            function init() {{
+                Streamlit.setFrameHeight(260);
+
+                if (!SpeechRecognition) {{
+                    setStatus("Status: Speech recognition not supported in this browser", "error");
+                    sendValue();
+                    return;
+                }}
+
+                recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = "en-US";
+
+                recognition.onstart = function() {{
+                    isListening = true;
+                    lastError = "";
+                    setStatus("Status: Listening...", "listening");
+                    sendValue();
+                }};
+
+                recognition.onresult = function(event) {{
+                    interimTranscript = "";
+
+                    for (let i = event.resultIndex; i < event.results.length; i++) {{
+                        const chunk = event.results[i][0].transcript.trim();
+
+                        if (event.results[i].isFinal) {{
+                            finalTranscript = (finalTranscript + " " + chunk).trim();
+                        }} else {{
+                            interimTranscript = (interimTranscript + " " + chunk).trim();
+                        }}
+                    }}
+
+                    refreshBox();
+                    sendValue();
+                }};
+
+                recognition.onerror = function(event) {{
+                    lastError = event.error || "unknown_error";
+                    isListening = false;
+                    setStatus("Status: Error - " + lastError, "error");
+                    sendValue();
+                }};
+
+                recognition.onend = function() {{
+                    isListening = false;
+                    interimTranscript = "";
+                    refreshBox();
+                    setStatus("Status: Idle", "idle");
+                    sendValue();
+                }};
+
+                startBtn.addEventListener("click", function() {{
+                    try {{
+                        recognition.start();
+                    }} catch (err) {{}}
+                }});
+
+                stopBtn.addEventListener("click", function() {{
+                    try {{
+                        recognition.stop();
+                    }} catch (err) {{}}
+                }});
+
+                clearBtn.addEventListener("click", function() {{
+                    finalTranscript = "";
+                    interimTranscript = "";
+                    lastError = "";
+                    refreshBox();
+                    setStatus("Status: Idle", "idle");
+                    sendValue();
+                }});
+
+                sendValue();
+            }}
+
+            function onRender(event) {{
+                init();
+            }}
+
+            Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);
+            Streamlit.setComponentReady();
+            Streamlit.setFrameHeight(260);
+        </script>
+    </body>
+    </html>
+    """
+    return components.html(html, height=260, key=component_key)
+
+
+def append_text(existing_text, incoming_text):
+    existing_text = str(existing_text or "")
+    incoming_text = str(incoming_text or "").strip()
+
+    if not incoming_text:
+        return existing_text
+
+    if not existing_text.strip():
+        return incoming_text
+
+    return existing_text.rstrip() + "\n" + incoming_text
+
+
+def replace_text(existing_text, incoming_text):
+    return str(incoming_text or "").strip()
+
+
+def apply_voice_text_to_target(example_index, target_field, mode):
+    transcript = st.session_state.voice_transcript.strip()
+
+    if not transcript:
+        st.warning("No voice transcript to insert.")
+        return
+
+    ex = st.session_state.examples[example_index]
+
+    if target_field not in ["instruction", "notes", "setup", "code"]:
+        st.error("Invalid target field.")
+        return
+
+    current_value = ex.get(target_field, "")
+
+    if mode == "append":
+        ex[target_field] = append_text(current_value, transcript)
+    elif mode == "replace":
+        ex[target_field] = replace_text(current_value, transcript)
+
+    st.session_state.examples[example_index] = ex
+
+    if target_field == "code":
+        st.session_state.ace_refresh_token += 1
+
+    safe_rerun()
+
+
 # =========================
 # Build Review Viewer Text
 # =========================
@@ -266,6 +554,30 @@ if "example_rows" not in st.session_state:
 
 if "separated_text" not in st.session_state:
     st.session_state.separated_text = ""
+
+if "voice_transcript" not in st.session_state:
+    st.session_state.voice_transcript = ""
+
+if "voice_interim" not in st.session_state:
+    st.session_state.voice_interim = ""
+
+if "voice_supported" not in st.session_state:
+    st.session_state.voice_supported = None
+
+if "voice_error" not in st.session_state:
+    st.session_state.voice_error = ""
+
+if "voice_is_listening" not in st.session_state:
+    st.session_state.voice_is_listening = False
+
+if "voice_target_example" not in st.session_state:
+    st.session_state.voice_target_example = 0
+
+if "voice_target_field" not in st.session_state:
+    st.session_state.voice_target_field = "code"
+
+if "ace_refresh_token" not in st.session_state:
+    st.session_state.ace_refresh_token = 0
 
 
 # =========================
@@ -533,7 +845,10 @@ def rows_to_tsv(rows):
 # App UI
 # =========================
 st.title("Python Review Block Builder")
-st.markdown('<div class="small-muted">Spreadsheet-style layout, but friendlier to code and mobile screens.</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="small-muted">Spreadsheet-style layout, but friendlier to code and mobile screens.</div>',
+    unsafe_allow_html=True
+)
 
 tab1, tab2, tab3 = st.tabs(["Build Review Block", "Separate Existing Block", "Review Viewer"])
 
@@ -548,6 +863,97 @@ with tab1:
 
     with top_col2:
         concept = st.text_input("Concept")
+
+    st.markdown("---")
+
+    st.subheader("Voice Input - Phase 1")
+    st.caption("Plain dictation first. Capture voice, then insert it into the field you want.")
+
+    voice_control_col1, voice_control_col2 = st.columns(2)
+
+    with voice_control_col1:
+        example_labels = [f"Example {i+1}" for i in range(len(st.session_state.examples))]
+        selected_example_label = st.selectbox(
+            "Voice Target Example",
+            options=example_labels,
+            index=min(st.session_state.voice_target_example, len(example_labels) - 1) if example_labels else 0
+        )
+        st.session_state.voice_target_example = example_labels.index(selected_example_label)
+
+    with voice_control_col2:
+        field_map = {
+            "Instruction": "instruction",
+            "Notes": "notes",
+            "Setup": "setup",
+            "Code": "code",
+        }
+
+        selected_field_label = st.selectbox(
+            "Voice Target Field",
+            options=list(field_map.keys()),
+            index=list(field_map.values()).index(st.session_state.voice_target_field)
+            if st.session_state.voice_target_field in field_map.values()
+            else 3
+        )
+        st.session_state.voice_target_field = field_map[selected_field_label]
+
+    voice_payload = render_voice_component("voice_phase1_component")
+
+    if isinstance(voice_payload, dict):
+        st.session_state.voice_transcript = str(voice_payload.get("transcript", "") or "")
+        st.session_state.voice_interim = str(voice_payload.get("interim", "") or "")
+        st.session_state.voice_supported = voice_payload.get("supported")
+        st.session_state.voice_error = str(voice_payload.get("error", "") or "")
+        st.session_state.voice_is_listening = bool(voice_payload.get("is_listening", False))
+
+    voice_status_col1, voice_status_col2 = st.columns(2)
+
+    with voice_status_col1:
+        st.text_area(
+            "Voice Transcript",
+            value=st.session_state.voice_transcript,
+            height=140,
+            key="voice_transcript_display"
+        )
+
+    with voice_status_col2:
+        status_lines = []
+        status_lines.append(f"Supported: {st.session_state.voice_supported}")
+        status_lines.append(f"Listening: {st.session_state.voice_is_listening}")
+        status_lines.append(f"Error: {st.session_state.voice_error or 'None'}")
+        status_lines.append(f"Target Example: Example {st.session_state.voice_target_example + 1}")
+        status_lines.append(f"Target Field: {st.session_state.voice_target_field}")
+
+        st.text_area(
+            "Voice Status",
+            value="\n".join(status_lines),
+            height=140,
+            key="voice_status_display"
+        )
+
+    voice_action_col1, voice_action_col2, voice_action_col3 = st.columns(3)
+
+    with voice_action_col1:
+        if st.button("Append Transcript to Target", use_container_width=True):
+            apply_voice_text_to_target(
+                example_index=st.session_state.voice_target_example,
+                target_field=st.session_state.voice_target_field,
+                mode="append"
+            )
+
+    with voice_action_col2:
+        if st.button("Replace Target with Transcript", use_container_width=True):
+            apply_voice_text_to_target(
+                example_index=st.session_state.voice_target_example,
+                target_field=st.session_state.voice_target_field,
+                mode="replace"
+            )
+
+    with voice_action_col3:
+        if st.button("Clear Saved Transcript", use_container_width=True):
+            st.session_state.voice_transcript = ""
+            st.session_state.voice_interim = ""
+            safe_rerun()
 
     st.markdown("---")
 
@@ -589,7 +995,7 @@ with tab1:
                 value=ex["code"],
                 language="python",
                 theme="monokai",
-                key=f"code_{i}",
+                key=f"code_{i}_{st.session_state.ace_refresh_token}",
                 height=260
             )
 
