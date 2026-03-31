@@ -152,6 +152,7 @@ def row_matches_search(record, search_text, search_mode):
         "Instruction": str(record.get("Instruction", "")).strip(),
         "Setup": str(record.get("Setup", "")).strip(),
         "Code": str(record.get("Code", "")).strip(),
+        "Mock Input": str(record.get("Mock Input", "")).strip(),
         "Result": str(record.get("Result", "")).strip(),
         "Notes": str(record.get("Notes", "")).strip(),
         "Created At": str(record.get("Created At", "")).strip(),
@@ -203,15 +204,45 @@ def get_sorted_section_rows(section_rows):
     return sorted(section_rows, key=row_order_key)
 
 
+def build_mock_input_function(mock_input_text):
+    normalized = str(mock_input_text).replace("\r\n", "\n").replace("\r", "\n")
+
+    if not normalized.strip():
+        def no_mock_input(prompt=""):
+            raise RuntimeError("This example uses input(), but no Mock Input was provided.")
+        return no_mock_input
+
+    provided_inputs = normalized.split("\n")
+    input_index = {"value": 0}
+
+    def mock_input(prompt=""):
+        if input_index["value"] >= len(provided_inputs):
+            raise RuntimeError("This example requested more input() values than were provided in Mock Input.")
+        value = provided_inputs[input_index["value"]]
+        input_index["value"] += 1
+        return value
+
+    return mock_input
+
+
 # =========================
 # Build Review Viewer Text
 # =========================
-def build_review_view_text(section_rows, show_setup, show_instruction, show_notes, show_code, show_result):
+def build_review_view_text(
+    section_rows,
+    show_setup,
+    show_instruction,
+    show_notes,
+    show_code,
+    show_mock_input,
+    show_result
+):
     lines = []
 
     for index, row in enumerate(section_rows):
         setup_text = str(row.get("Setup", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
         code_text = str(row.get("Code", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
+        mock_input_text = str(row.get("Mock Input", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
         instruction = str(row.get("Instruction", "")).strip()
         notes = str(row.get("Notes", "")).strip()
         result = str(row.get("Result", "")).strip()
@@ -229,6 +260,11 @@ def build_review_view_text(section_rows, show_setup, show_instruction, show_note
 
         if show_code and code_text:
             lines.append(code_text)
+
+        if show_mock_input and mock_input_text:
+            lines.append("# Mock Input:")
+            for input_line in mock_input_text.splitlines():
+                lines.append(f"# {input_line}")
 
         if show_result and result:
             if "\n" in result:
@@ -254,7 +290,8 @@ if "examples" not in st.session_state:
             "setup": "",
             "instruction": "",
             "notes": "",
-            "code": ""
+            "code": "",
+            "mock_input": ""
         }
     ]
 
@@ -277,7 +314,8 @@ def add_example():
             "setup": "",
             "instruction": "",
             "notes": "",
-            "code": ""
+            "code": "",
+            "mock_input": ""
         }
     )
 
@@ -294,7 +332,11 @@ def compile_block(section_name, concept):
         result = ""
         current_setup = ex["setup"].strip()
         current_code = ex["code"].strip()
-        runtime_env = {}
+        current_mock_input = ex["mock_input"].replace("\r\n", "\n").replace("\r", "\n").strip()
+
+        runtime_env = {
+            "input": build_mock_input_function(ex["mock_input"])
+        }
 
         if current_setup:
             block += "# Setup:\n"
@@ -328,6 +370,11 @@ def compile_block(section_name, concept):
         if current_code:
             block += current_code + "\n"
 
+        if current_mock_input:
+            block += "# Mock Input:\n"
+            for input_line in current_mock_input.splitlines():
+                block += f"# {input_line}\n"
+
         if result:
             single_line_result = result.replace("\n", " | ")
             block += f"# Result: {single_line_result}\n"
@@ -341,6 +388,7 @@ def compile_block(section_name, concept):
             ex["instruction"],    # Instruction
             current_setup,        # Setup
             current_code,         # Code
+            current_mock_input,   # Mock Input
             result,               # Result
             ex["notes"]           # Notes
         ])
@@ -370,8 +418,9 @@ def save_block_and_examples(section_name, concept):
                 ex_row[3],  # Instruction
                 ex_row[4],  # Setup
                 ex_row[5],  # Code
-                ex_row[6],  # Result
-                ex_row[7],  # Notes
+                ex_row[6],  # Mock Input
+                ex_row[7],  # Result
+                ex_row[8],  # Notes
                 created_at, # Created At
             ])
 
@@ -400,6 +449,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
             "instruction": "",
             "notes": "",
             "code_lines": [],
+            "mock_input_lines": [],
             "result": "",
         }
 
@@ -408,11 +458,13 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
             return
 
         code_only = "\n".join(current_example["code_lines"]).rstrip()
+        mock_input_only = "\n".join(current_example["mock_input_lines"]).rstrip()
 
         has_content = (
             current_example["setup"].strip()
             or current_example["instruction"].strip()
             or current_example["notes"].strip()
+            or mock_input_only.strip()
             or current_example["result"].strip()
             or code_only.strip()
         )
@@ -428,6 +480,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
             current_example["instruction"].strip(),
             current_example["setup"].strip(),
             code_only.strip(),
+            mock_input_only.strip(),
             current_example["result"].strip(),
             current_example["notes"].strip(),
         ])
@@ -445,6 +498,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
 
                 if (
                     next_stripped == "# Setup:"
+                    or next_stripped == "# Mock Input:"
                     or next_stripped.startswith("# Instruction:")
                     or next_stripped.startswith("# Notes:")
                     or next_stripped.startswith("# Result:")
@@ -472,6 +526,40 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
             i += 1
             continue
 
+        if stripped == "# Mock Input:":
+            if current_example is None:
+                current_example = new_example()
+
+            i += 1
+            mock_input_lines = []
+
+            while i < len(lines):
+                next_line = lines[i]
+                next_stripped = next_line.strip()
+
+                if not next_stripped:
+                    i += 1
+                    continue
+
+                if (
+                    next_stripped == "# Setup:"
+                    or next_stripped == "# Mock Input:"
+                    or next_stripped.startswith("# Instruction:")
+                    or next_stripped.startswith("# Notes:")
+                    or next_stripped.startswith("# Result:")
+                ):
+                    break
+
+                if next_stripped.startswith("# "):
+                    mock_input_lines.append(next_stripped[2:].rstrip())
+                    i += 1
+                    continue
+
+                break
+
+            current_example["mock_input_lines"] = mock_input_lines
+            continue
+
         if stripped.startswith("# Result:"):
             if current_example is None:
                 current_example = new_example()
@@ -494,6 +582,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
 
                 if (
                     next_stripped == "# Setup:"
+                    or next_stripped == "# Mock Input:"
                     or next_stripped.startswith("# Instruction:")
                     or next_stripped.startswith("# Notes:")
                     or next_stripped.startswith("# Result:")
@@ -594,6 +683,14 @@ with tab1:
             )
 
             ex["code"] = code_value if code_value else ""
+
+            ex["mock_input"] = st.text_area(
+                "Mock Input (Optional)",
+                value=ex["mock_input"],
+                key=f"mock_input_{i}",
+                height=100,
+                help="Optional. Enter one input per line for code that uses input()."
+            )
 
             st.markdown("")
 
@@ -728,6 +825,7 @@ with tab3:
                     "Instruction",
                     "Setup",
                     "Code",
+                    "Mock Input",
                     "Result",
                     "Notes",
                     "Created At",
@@ -754,6 +852,7 @@ with tab3:
             show_instruction = st.checkbox("Instruction", value=True)
             show_notes = st.checkbox("Notes", value=True)
             show_code = st.checkbox("Code", value=True)
+            show_mock_input = st.checkbox("Mock Input", value=True)
             show_result = st.checkbox("Result", value=True)
 
         if not section_ids:
@@ -787,6 +886,7 @@ with tab3:
                         show_instruction=show_instruction,
                         show_notes=show_notes,
                         show_code=show_code,
+                        show_mock_input=show_mock_input,
                         show_result=show_result
                     )
 
@@ -810,6 +910,7 @@ with tab3:
                     show_instruction=show_instruction,
                     show_notes=show_notes,
                     show_code=show_code,
+                    show_mock_input=show_mock_input,
                     show_result=show_result
                 )
 
