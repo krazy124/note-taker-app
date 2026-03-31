@@ -667,12 +667,24 @@ with tab1:
                     height=120
                 )
 
-            ex["setup"] = st.text_area(
-                "Setup",
-                value=ex["setup"],
-                key=f"setup_{i}",
-                height=140
-            )
+            row2_col1, row2_col2 = st.columns(2)
+
+            with row2_col1:
+                ex["setup"] = st.text_area(
+                    "Setup",
+                    value=ex["setup"],
+                    key=f"setup_{i}",
+                    height=140
+                )
+
+            with row2_col2:
+                ex["mock_input"] = st.text_area(
+                    "Mock Input (Optional)",
+                    value=ex["mock_input"],
+                    key=f"mock_input_{i}",
+                    height=140,
+                    help="Optional. Enter one input per line for code that uses input()."
+                )
 
             code_value = st_ace(
                 value=ex["code"],
@@ -683,14 +695,6 @@ with tab1:
             )
 
             ex["code"] = code_value if code_value else ""
-
-            ex["mock_input"] = st.text_area(
-                "Mock Input (Optional)",
-                value=ex["mock_input"],
-                key=f"mock_input_{i}",
-                height=100,
-                help="Optional. Enter one input per line for code that uses input()."
-            )
 
             st.markdown("")
 
