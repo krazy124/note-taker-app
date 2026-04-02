@@ -875,15 +875,12 @@ with tab1:
                             )
 
             if ex["show_start_code"]:
-                st.markdown('<div class="ace-label">Start Code</div>', unsafe_allow_html=True)
-                start_code_value = st_ace(
+                ex["start_code"] = st.text_area(
+                    "Start Code",
                     value=ex["start_code"],
-                    language="python",
-                    theme="monokai",
                     key=f"start_code_{i}",
-                    height=130
+                    height=140
                 )
-                ex["start_code"] = start_code_value if start_code_value else ""
 
             st.markdown('<div class="ace-label">Code</div>', unsafe_allow_html=True)
             code_value = st_ace(
