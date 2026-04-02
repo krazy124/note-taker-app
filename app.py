@@ -69,6 +69,11 @@ st.markdown(
         display: block;
     }
 
+    .toggle-button-row {
+        margin-top: 0.35rem;
+        margin-bottom: 0.6rem;
+    }
+
     @media (max-width: 768px) {
         .block-container {
             padding-left: 0.7rem;
@@ -232,6 +237,29 @@ def build_mock_input_function(mock_input_text):
     return mock_input
 
 
+def normalize_multiline_text(value):
+    return str(value).replace("\r\n", "\n").replace("\r", "\n").strip()
+
+
+def append_commented_block(lines, label, text):
+    normalized = normalize_multiline_text(text)
+
+    if not normalized:
+        return
+
+    block_lines = normalized.splitlines()
+
+    if len(block_lines) == 1:
+        lines.append(f"# {label}: {block_lines[0]}")
+    else:
+        lines.append(f"# {label}:")
+        for line in block_lines:
+            if line.strip():
+                lines.append(f"# {line}")
+            else:
+                lines.append("#")
+
+
 # =========================
 # Build Review Viewer Text
 # =========================
@@ -248,13 +276,13 @@ def build_review_view_text(
     lines = []
 
     for index, row in enumerate(section_rows):
-        setup_text = str(row.get("Setup", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
-        start_code_text = str(row.get("Start Code", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
-        code_text = str(row.get("Code", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
-        mock_input_text = str(row.get("Mock Input", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
-        instruction = str(row.get("Instruction", "")).strip()
-        notes = str(row.get("Notes", "")).strip()
-        result = str(row.get("Result", "")).strip()
+        setup_text = normalize_multiline_text(row.get("Setup", ""))
+        start_code_text = normalize_multiline_text(row.get("Start Code", ""))
+        code_text = normalize_multiline_text(row.get("Code", ""))
+        mock_input_text = normalize_multiline_text(row.get("Mock Input", ""))
+        instruction = normalize_multiline_text(row.get("Instruction", ""))
+        notes = normalize_multiline_text(row.get("Notes", ""))
+        result = normalize_multiline_text(row.get("Result", ""))
 
         if show_setup and setup_text:
             lines.append("# Setup:")
@@ -262,10 +290,10 @@ def build_review_view_text(
             lines.append("")
 
         if show_instruction and instruction:
-            lines.append(f"# Instruction: {instruction}")
+            append_commented_block(lines, "Instruction", instruction)
 
         if show_notes and notes:
-            lines.append(f"# Notes: {notes}")
+            append_commented_block(lines, "Notes", notes)
 
         if show_start_code and start_code_text:
             lines.append("# Start Code:")
@@ -298,17 +326,23 @@ def build_review_view_text(
 # =========================
 # Session State
 # =========================
+def create_blank_example():
+    return {
+        "setup": "",
+        "instruction": "",
+        "notes": "",
+        "start_code": "",
+        "code": "",
+        "mock_input": "",
+        "show_setup": False,
+        "show_notes": False,
+        "show_start_code": False,
+        "show_mock_input": False,
+    }
+
+
 if "examples" not in st.session_state:
-    st.session_state.examples = [
-        {
-            "setup": "",
-            "instruction": "",
-            "notes": "",
-            "start_code": "",
-            "code": "",
-            "mock_input": ""
-        }
-    ]
+    st.session_state.examples = [create_blank_example()]
 
 if "compiled_block" not in st.session_state:
     st.session_state.compiled_block = ""
@@ -324,40 +358,39 @@ if "separated_text" not in st.session_state:
 # Add Example
 # =========================
 def add_example():
-    st.session_state.examples.append(
-        {
-            "setup": "",
-            "instruction": "",
-            "notes": "",
-            "start_code": "",
-            "code": "",
-            "mock_input": ""
-        }
-    )
+    st.session_state.examples.append(create_blank_example())
+
+
+def toggle_example_field(example_index, field_name):
+    current_value = st.session_state.examples[example_index].get(field_name, False)
+    st.session_state.examples[example_index][field_name] = not current_value
 
 
 # =========================
 # Compile Block
 # =========================
 def compile_block(section_name, concept):
-    block = ""
+    block_lines = []
     example_rows = []
 
     for i, ex in enumerate(st.session_state.examples, start=1):
         stdout_buffer = io.StringIO()
         result = ""
-        current_setup = ex["setup"].strip()
-        current_start_code = ex["start_code"].strip()
-        current_code = ex["code"].strip()
-        current_mock_input = ex["mock_input"].replace("\r\n", "\n").replace("\r", "\n").strip()
+        current_setup = normalize_multiline_text(ex["setup"])
+        current_instruction = normalize_multiline_text(ex["instruction"])
+        current_notes = normalize_multiline_text(ex["notes"])
+        current_start_code = normalize_multiline_text(ex["start_code"])
+        current_code = normalize_multiline_text(ex["code"])
+        current_mock_input = normalize_multiline_text(ex["mock_input"])
 
         runtime_env = {
             "input": build_mock_input_function(ex["mock_input"])
         }
 
         if current_setup:
-            block += "# Setup:\n"
-            block += current_setup + "\n\n"
+            block_lines.append("# Setup:")
+            block_lines.append(current_setup)
+            block_lines.append("")
 
         try:
             if current_setup:
@@ -365,15 +398,16 @@ def compile_block(section_name, concept):
         except Exception as e:
             result = f"Setup Error: {e}"
 
-        if ex["instruction"]:
-            block += f"# Instruction: {ex['instruction']}\n"
+        if current_instruction:
+            append_commented_block(block_lines, "Instruction", current_instruction)
 
-        if ex["notes"]:
-            block += f"# Notes: {ex['notes']}\n"
+        if current_notes:
+            append_commented_block(block_lines, "Notes", current_notes)
 
         if current_start_code:
-            block += "# Start Code:\n"
-            block += current_start_code + "\n\n"
+            block_lines.append("# Start Code:")
+            block_lines.append(current_start_code)
+            block_lines.append("")
 
         if not result:
             try:
@@ -389,18 +423,18 @@ def compile_block(section_name, concept):
                 result = f"Code Error: {e}"
 
         if current_code:
-            block += current_code + "\n"
+            block_lines.append(current_code)
 
         if current_mock_input:
-            block += "# Mock Input:\n"
+            block_lines.append("# Mock Input:")
             for input_line in current_mock_input.splitlines():
-                block += f"# {input_line}\n"
+                block_lines.append(f"# {input_line}")
 
         if result:
             single_line_result = result.replace("\n", " | ")
-            block += f"# Result: {single_line_result}\n"
+            block_lines.append(f"# Result: {single_line_result}")
 
-        block += "\n"
+        block_lines.append("")
 
         example_rows.append([
             i,                    # Section Order
@@ -415,7 +449,7 @@ def compile_block(section_name, concept):
             ex["notes"]           # Notes
         ])
 
-    st.session_state.compiled_block = block
+    st.session_state.compiled_block = "\n".join(block_lines).strip()
     st.session_state.example_rows = example_rows
 
 
@@ -455,6 +489,42 @@ def save_block_and_examples(section_name, concept):
 # =========================
 # Separate Existing Block Content
 # =========================
+def parse_comment_block(lines, start_index, label):
+    current_line = lines[start_index].strip()
+    prefix = f"# {label}:"
+    inline_value = current_line.replace(prefix, "", 1).strip()
+
+    if inline_value:
+        return inline_value, start_index + 1
+
+    i = start_index + 1
+    collected = []
+
+    while i < len(lines):
+        next_line = lines[i]
+        next_stripped = next_line.strip()
+
+        if (
+            next_stripped == "# Setup:"
+            or next_stripped == "# Start Code:"
+            or next_stripped == "# Mock Input:"
+            or next_stripped.startswith("# Instruction:")
+            or next_stripped.startswith("# Notes:")
+            or next_stripped.startswith("# Result:")
+        ):
+            break
+
+        if next_stripped.startswith("#"):
+            comment_text = next_stripped[1:].lstrip()
+            collected.append(comment_text)
+            i += 1
+            continue
+
+        break
+
+    return "\n".join(collected).strip(), i
+
+
 def parse_block_content_to_rows(section_id, topic, concept, block_text):
     lines = block_text.splitlines()
     rows = []
@@ -542,16 +612,18 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
         if stripped.startswith("# Instruction:"):
             finalize_example()
             current_example = new_example()
-            current_example["instruction"] = stripped.replace("# Instruction:", "", 1).strip()
-            i += 1
+            instruction_text, next_index = parse_comment_block(lines, i, "Instruction")
+            current_example["instruction"] = instruction_text
+            i = next_index
             continue
 
         if stripped.startswith("# Notes:"):
             if current_example is None:
                 current_example = new_example()
 
-            current_example["notes"] = stripped.replace("# Notes:", "", 1).strip()
-            i += 1
+            notes_text, next_index = parse_comment_block(lines, i, "Notes")
+            current_example["notes"] = notes_text
+            i = next_index
             continue
 
         if stripped == "# Start Code:":
@@ -708,52 +780,110 @@ with tab1:
                 unsafe_allow_html=True
             )
 
-            row1_col1, row1_col2 = st.columns(2)
-
-            with row1_col1:
-                ex["instruction"] = st.text_area(
-                    "Instruction",
-                    value=ex["instruction"],
-                    key=f"instruction_{i}",
-                    height=120
-                )
-
-            with row1_col2:
-                ex["notes"] = st.text_area(
-                    "Notes",
-                    value=ex["notes"],
-                    key=f"notes_{i}",
-                    height=120
-                )
-
-            row2_col1, row2_col2 = st.columns(2)
-
-            with row2_col1:
-                ex["setup"] = st.text_area(
-                    "Setup",
-                    value=ex["setup"],
-                    key=f"setup_{i}",
-                    height=140
-                )
-
-            with row2_col2:
-                ex["mock_input"] = st.text_area(
-                    "Mock Input (Optional)",
-                    value=ex["mock_input"],
-                    key=f"mock_input_{i}",
-                    height=140,
-                    help="Optional. Enter one input per line for code that uses input()."
-                )
-
-            st.markdown('<div class="ace-label">Start Code</div>', unsafe_allow_html=True)
-            start_code_value = st_ace(
-                value=ex["start_code"],
-                language="python",
-                theme="monokai",
-                key=f"start_code_{i}",
-                height=130
+            ex["instruction"] = st.text_area(
+                "Instruction",
+                value=ex["instruction"],
+                key=f"instruction_{i}",
+                height=120
             )
-            ex["start_code"] = start_code_value if start_code_value else ""
+
+            st.markdown('<div class="toggle-button-row"></div>', unsafe_allow_html=True)
+
+            button_col1, button_col2, button_col3, button_col4 = st.columns(4)
+
+            setup_button_label = "Hide Setup" if ex["show_setup"] else "Show Setup"
+            notes_button_label = "Hide Notes" if ex["show_notes"] else "Show Notes"
+            start_code_button_label = "Hide Start Code" if ex["show_start_code"] else "Show Start Code"
+            mock_input_button_label = "Hide Mock Input" if ex["show_mock_input"] else "Show Mock Input"
+
+            with button_col1:
+                if st.button(setup_button_label, key=f"toggle_setup_{i}", use_container_width=True):
+                    toggle_example_field(i, "show_setup")
+
+            with button_col2:
+                if st.button(notes_button_label, key=f"toggle_notes_{i}", use_container_width=True):
+                    toggle_example_field(i, "show_notes")
+
+            with button_col3:
+                if st.button(start_code_button_label, key=f"toggle_start_code_{i}", use_container_width=True):
+                    toggle_example_field(i, "show_start_code")
+
+            with button_col4:
+                if st.button(mock_input_button_label, key=f"toggle_mock_input_{i}", use_container_width=True):
+                    toggle_example_field(i, "show_mock_input")
+
+            visible_top_fields = []
+            if ex["show_setup"]:
+                visible_top_fields.append("setup")
+            if ex["show_notes"]:
+                visible_top_fields.append("notes")
+            if ex["show_mock_input"]:
+                visible_top_fields.append("mock_input")
+
+            if len(visible_top_fields) == 1:
+                field_name = visible_top_fields[0]
+
+                if field_name == "setup":
+                    ex["setup"] = st.text_area(
+                        "Setup",
+                        value=ex["setup"],
+                        key=f"setup_{i}",
+                        height=140
+                    )
+                elif field_name == "notes":
+                    ex["notes"] = st.text_area(
+                        "Notes",
+                        value=ex["notes"],
+                        key=f"notes_{i}",
+                        height=140
+                    )
+                elif field_name == "mock_input":
+                    ex["mock_input"] = st.text_area(
+                        "Mock Input (Optional)",
+                        value=ex["mock_input"],
+                        key=f"mock_input_{i}",
+                        height=140,
+                        help="Optional. Enter one input per line for code that uses input()."
+                    )
+
+            elif len(visible_top_fields) >= 2:
+                cols = st.columns(2)
+
+                for idx, field_name in enumerate(visible_top_fields):
+                    with cols[idx % 2]:
+                        if field_name == "setup":
+                            ex["setup"] = st.text_area(
+                                "Setup",
+                                value=ex["setup"],
+                                key=f"setup_{i}",
+                                height=140
+                            )
+                        elif field_name == "notes":
+                            ex["notes"] = st.text_area(
+                                "Notes",
+                                value=ex["notes"],
+                                key=f"notes_{i}",
+                                height=140
+                            )
+                        elif field_name == "mock_input":
+                            ex["mock_input"] = st.text_area(
+                                "Mock Input (Optional)",
+                                value=ex["mock_input"],
+                                key=f"mock_input_{i}",
+                                height=140,
+                                help="Optional. Enter one input per line for code that uses input()."
+                            )
+
+            if ex["show_start_code"]:
+                st.markdown('<div class="ace-label">Start Code</div>', unsafe_allow_html=True)
+                start_code_value = st_ace(
+                    value=ex["start_code"],
+                    language="python",
+                    theme="monokai",
+                    key=f"start_code_{i}",
+                    height=130
+                )
+                ex["start_code"] = start_code_value if start_code_value else ""
 
             st.markdown('<div class="ace-label">Code</div>', unsafe_allow_html=True)
             code_value = st_ace(
