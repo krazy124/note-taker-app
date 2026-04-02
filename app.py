@@ -63,6 +63,12 @@ st.markdown(
         margin-bottom: 0.75rem;
     }
 
+    .ace-label {
+        font-weight: 600;
+        margin-bottom: 0.35rem;
+        display: block;
+    }
+
     @media (max-width: 768px) {
         .block-container {
             padding-left: 0.7rem;
@@ -151,6 +157,7 @@ def row_matches_search(record, search_text, search_mode):
         "Concept": clean_label_text(record.get("Concept", "")),
         "Instruction": str(record.get("Instruction", "")).strip(),
         "Setup": str(record.get("Setup", "")).strip(),
+        "Start Code": str(record.get("Start Code", "")).strip(),
         "Code": str(record.get("Code", "")).strip(),
         "Mock Input": str(record.get("Mock Input", "")).strip(),
         "Result": str(record.get("Result", "")).strip(),
@@ -233,6 +240,7 @@ def build_review_view_text(
     show_setup,
     show_instruction,
     show_notes,
+    show_start_code,
     show_code,
     show_mock_input,
     show_result
@@ -241,6 +249,7 @@ def build_review_view_text(
 
     for index, row in enumerate(section_rows):
         setup_text = str(row.get("Setup", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
+        start_code_text = str(row.get("Start Code", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
         code_text = str(row.get("Code", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
         mock_input_text = str(row.get("Mock Input", "")).replace("\r\n", "\n").replace("\r", "\n").strip()
         instruction = str(row.get("Instruction", "")).strip()
@@ -257,6 +266,11 @@ def build_review_view_text(
 
         if show_notes and notes:
             lines.append(f"# Notes: {notes}")
+
+        if show_start_code and start_code_text:
+            lines.append("# Start Code:")
+            lines.append(start_code_text)
+            lines.append("")
 
         if show_code and code_text:
             lines.append(code_text)
@@ -290,6 +304,7 @@ if "examples" not in st.session_state:
             "setup": "",
             "instruction": "",
             "notes": "",
+            "start_code": "",
             "code": "",
             "mock_input": ""
         }
@@ -314,6 +329,7 @@ def add_example():
             "setup": "",
             "instruction": "",
             "notes": "",
+            "start_code": "",
             "code": "",
             "mock_input": ""
         }
@@ -331,6 +347,7 @@ def compile_block(section_name, concept):
         stdout_buffer = io.StringIO()
         result = ""
         current_setup = ex["setup"].strip()
+        current_start_code = ex["start_code"].strip()
         current_code = ex["code"].strip()
         current_mock_input = ex["mock_input"].replace("\r\n", "\n").replace("\r", "\n").strip()
 
@@ -348,6 +365,16 @@ def compile_block(section_name, concept):
         except Exception as e:
             result = f"Setup Error: {e}"
 
+        if ex["instruction"]:
+            block += f"# Instruction: {ex['instruction']}\n"
+
+        if ex["notes"]:
+            block += f"# Notes: {ex['notes']}\n"
+
+        if current_start_code:
+            block += "# Start Code:\n"
+            block += current_start_code + "\n\n"
+
         if not result:
             try:
                 with contextlib.redirect_stdout(stdout_buffer):
@@ -360,12 +387,6 @@ def compile_block(section_name, concept):
 
             except Exception as e:
                 result = f"Code Error: {e}"
-
-        if ex["instruction"]:
-            block += f"# Instruction: {ex['instruction']}\n"
-
-        if ex["notes"]:
-            block += f"# Notes: {ex['notes']}\n"
 
         if current_code:
             block += current_code + "\n"
@@ -387,6 +408,7 @@ def compile_block(section_name, concept):
             concept,              # Concept
             ex["instruction"],    # Instruction
             current_setup,        # Setup
+            current_start_code,   # Start Code
             current_code,         # Code
             current_mock_input,   # Mock Input
             result,               # Result
@@ -412,16 +434,17 @@ def save_block_and_examples(section_name, concept):
         for ex_row in st.session_state.example_rows:
             rows_to_save.append([
                 section_id,
-                ex_row[0],  # Section Order
-                ex_row[1],  # Topic
-                ex_row[2],  # Concept
-                ex_row[3],  # Instruction
-                ex_row[4],  # Setup
-                ex_row[5],  # Code
-                ex_row[6],  # Mock Input
-                ex_row[7],  # Result
-                ex_row[8],  # Notes
-                created_at, # Created At
+                ex_row[0],   # Section Order
+                ex_row[1],   # Topic
+                ex_row[2],   # Concept
+                ex_row[3],   # Instruction
+                ex_row[4],   # Setup
+                ex_row[5],   # Start Code
+                ex_row[6],   # Code
+                ex_row[7],   # Mock Input
+                ex_row[8],   # Result
+                ex_row[9],   # Notes
+                created_at,  # Created At
             ])
 
         example_sheet.append_rows(rows_to_save)
@@ -448,6 +471,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
             "setup": active_setup,
             "instruction": "",
             "notes": "",
+            "start_code_lines": [],
             "code_lines": [],
             "mock_input_lines": [],
             "result": "",
@@ -457,6 +481,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
         if current_example is None:
             return
 
+        start_code_only = "\n".join(current_example["start_code_lines"]).rstrip()
         code_only = "\n".join(current_example["code_lines"]).rstrip()
         mock_input_only = "\n".join(current_example["mock_input_lines"]).rstrip()
 
@@ -464,9 +489,10 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
             current_example["setup"].strip()
             or current_example["instruction"].strip()
             or current_example["notes"].strip()
+            or start_code_only.strip()
+            or code_only.strip()
             or mock_input_only.strip()
             or current_example["result"].strip()
-            or code_only.strip()
         )
 
         if not has_content:
@@ -479,6 +505,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
             concept,
             current_example["instruction"].strip(),
             current_example["setup"].strip(),
+            start_code_only.strip(),
             code_only.strip(),
             mock_input_only.strip(),
             current_example["result"].strip(),
@@ -498,6 +525,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
 
                 if (
                     next_stripped == "# Setup:"
+                    or next_stripped == "# Start Code:"
                     or next_stripped == "# Mock Input:"
                     or next_stripped.startswith("# Instruction:")
                     or next_stripped.startswith("# Notes:")
@@ -526,6 +554,32 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
             i += 1
             continue
 
+        if stripped == "# Start Code:":
+            if current_example is None:
+                current_example = new_example()
+
+            i += 1
+            start_code_lines = []
+
+            while i < len(lines):
+                next_stripped = lines[i].strip()
+
+                if (
+                    next_stripped == "# Setup:"
+                    or next_stripped == "# Start Code:"
+                    or next_stripped == "# Mock Input:"
+                    or next_stripped.startswith("# Instruction:")
+                    or next_stripped.startswith("# Notes:")
+                    or next_stripped.startswith("# Result:")
+                ):
+                    break
+
+                start_code_lines.append(lines[i])
+                i += 1
+
+            current_example["start_code_lines"] = start_code_lines
+            continue
+
         if stripped == "# Mock Input:":
             if current_example is None:
                 current_example = new_example()
@@ -543,6 +597,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
 
                 if (
                     next_stripped == "# Setup:"
+                    or next_stripped == "# Start Code:"
                     or next_stripped == "# Mock Input:"
                     or next_stripped.startswith("# Instruction:")
                     or next_stripped.startswith("# Notes:")
@@ -582,6 +637,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
 
                 if (
                     next_stripped == "# Setup:"
+                    or next_stripped == "# Start Code:"
                     or next_stripped == "# Mock Input:"
                     or next_stripped.startswith("# Instruction:")
                     or next_stripped.startswith("# Notes:")
@@ -622,7 +678,10 @@ def rows_to_tsv(rows):
 # App UI
 # =========================
 st.title("Python Review Block Builder")
-st.markdown('<div class="small-muted">Spreadsheet-style layout, but friendlier to code and mobile screens.</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="small-muted">Spreadsheet-style layout, but friendlier to code and mobile screens.</div>',
+    unsafe_allow_html=True
+)
 
 tab1, tab2, tab3 = st.tabs(["Build Review Block", "Separate Existing Block", "Review Viewer"])
 
@@ -667,7 +726,7 @@ with tab1:
                     height=120
                 )
 
-            row2_col1, row2_col2 = st.columns(2)
+            row2_col1, row2_col2, row2_col3 = st.columns([3, 3, 1])
 
             with row2_col1:
                 ex["setup"] = st.text_area(
@@ -678,14 +737,26 @@ with tab1:
                 )
 
             with row2_col2:
+                st.markdown('<div class="ace-label">Start Code</div>', unsafe_allow_html=True)
+                start_code_value = st_ace(
+                    value=ex["start_code"],
+                    language="python",
+                    theme="monokai",
+                    key=f"start_code_{i}",
+                    height=140
+                )
+                ex["start_code"] = start_code_value if start_code_value else ""
+
+            with row2_col3:
                 ex["mock_input"] = st.text_area(
-                    "Mock Input (Optional)",
+                    "Mock Input",
                     value=ex["mock_input"],
                     key=f"mock_input_{i}",
                     height=140,
                     help="Optional. Enter one input per line for code that uses input()."
                 )
 
+            st.markdown('<div class="ace-label">Code</div>', unsafe_allow_html=True)
             code_value = st_ace(
                 value=ex["code"],
                 language="python",
@@ -828,6 +899,7 @@ with tab3:
                     "Concept",
                     "Instruction",
                     "Setup",
+                    "Start Code",
                     "Code",
                     "Mock Input",
                     "Result",
@@ -855,6 +927,7 @@ with tab3:
             show_setup = st.checkbox("Setup", value=True)
             show_instruction = st.checkbox("Instruction", value=True)
             show_notes = st.checkbox("Notes", value=True)
+            show_start_code = st.checkbox("Start Code", value=True)
             show_code = st.checkbox("Code", value=True)
             show_mock_input = st.checkbox("Mock Input", value=True)
             show_result = st.checkbox("Result", value=True)
@@ -889,6 +962,7 @@ with tab3:
                         show_setup=show_setup,
                         show_instruction=show_instruction,
                         show_notes=show_notes,
+                        show_start_code=show_start_code,
                         show_code=show_code,
                         show_mock_input=show_mock_input,
                         show_result=show_result
@@ -913,6 +987,7 @@ with tab3:
                     show_setup=show_setup,
                     show_instruction=show_instruction,
                     show_notes=show_notes,
+                    show_start_code=show_start_code,
                     show_code=show_code,
                     show_mock_input=show_mock_input,
                     show_result=show_result
