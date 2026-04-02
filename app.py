@@ -759,7 +759,6 @@ tab1, tab2, tab3 = st.tabs(["Build Review Block", "Separate Existing Block", "Re
 
 
 with tab1:
-    st.subheader("Section Information")
 
     top_col1, top_col2 = st.columns(2)
 
