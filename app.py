@@ -726,7 +726,7 @@ with tab1:
                     height=120
                 )
 
-            row2_col1, row2_col2, row2_col3 = st.columns([3, 3, 1])
+            row2_col1, row2_col2 = st.columns(2)
 
             with row2_col1:
                 ex["setup"] = st.text_area(
@@ -737,58 +737,32 @@ with tab1:
                 )
 
             with row2_col2:
-                st.markdown('<div class="ace-label">Start Code</div>', unsafe_allow_html=True)
-                start_code_value = st_ace(
-                    value=ex["start_code"],
-                    language="python",
-                    theme="monokai",
-                    key=f"start_code_{i}",
-                    height=140
+                ex["mock_input"] = st.text_area(
+                    "Mock Input (Optional)",
+                    value=ex["mock_input"],
+                    key=f"mock_input_{i}",
+                    height=140,
+                    help="Optional. Enter one input per line for code that uses input()."
                 )
-                ex["start_code"] = start_code_value if start_code_value else ""
 
-            # Back to clean 50/50 layout
-row2_col1, row2_col2 = st.columns(2)
+            st.markdown('<div class="ace-label">Start Code</div>', unsafe_allow_html=True)
+            start_code_value = st_ace(
+                value=ex["start_code"],
+                language="python",
+                theme="monokai",
+                key=f"start_code_{i}",
+                height=130
+            )
+            ex["start_code"] = start_code_value if start_code_value else ""
 
-with row2_col1:
-    ex["setup"] = st.text_area(
-        "Setup",
-        value=ex["setup"],
-        key=f"setup_{i}",
-        height=140
-    )
-
-with row2_col2:
-    ex["mock_input"] = st.text_area(
-        "Mock Input (Optional)",
-        value=ex["mock_input"],
-        key=f"mock_input_{i}",
-        height=140,
-        help="Optional. Enter one input per line for code that uses input()."
-    )
-
-    # Start Code (smaller, sits above main code)
-    st.markdown('<div class="ace-label">Start Code</div>', unsafe_allow_html=True)
-    start_code_value = st_ace(
-        value=ex["start_code"],
-        language="python",
-        theme="monokai",
-        key=f"start_code_{i}",
-        height=130   # ~50% of main code
-    )
-    ex["start_code"] = start_code_value if start_code_value else ""
-    
-    # Main Code
-    st.markdown('<div class="ace-label">Code</div>', unsafe_allow_html=True)
-    code_value = st_ace(
-        value=ex["code"],
-        language="python",
-        theme="monokai",
-        key=f"code_{i}",
-        height=260
-    )
-    ex["code"] = code_value if code_value else ""
-
+            st.markdown('<div class="ace-label">Code</div>', unsafe_allow_html=True)
+            code_value = st_ace(
+                value=ex["code"],
+                language="python",
+                theme="monokai",
+                key=f"code_{i}",
+                height=260
+            )
             ex["code"] = code_value if code_value else ""
 
             st.markdown("")
