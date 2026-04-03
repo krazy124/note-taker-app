@@ -887,7 +887,6 @@ with tab1:
             )
             ex["code"] = code_value if code_value else ""
 
-            st.markdown("")
 
     action_col1, action_col2 = st.columns([1, 1])
 
