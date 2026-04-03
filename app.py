@@ -764,8 +764,6 @@ with tab1:
     with top_col2:
         concept = st.text_input("Concept")
 
-    st.markdown("---")
-
     for i in range(len(st.session_state.examples)):
         ex = st.session_state.examples[i]
 
