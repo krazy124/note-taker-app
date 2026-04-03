@@ -750,10 +750,6 @@ def rows_to_tsv(rows):
 # App UI
 # =========================
 st.title("Python Review Block Builder")
-st.markdown(
-    '<div class="small-muted">Spreadsheet-style layout, but friendlier to code and mobile screens.</div>',
-    unsafe_allow_html=True
-)
 
 tab1, tab2, tab3 = st.tabs(["Build Review Block", "Separate Existing Block", "Review Viewer"])
 
