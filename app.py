@@ -77,7 +77,7 @@ st.markdown(
         margin-bottom: -20 !important;
     }
     .stApp {
-        background-image: url("https://today.uconn.edu/wp-content/uploads/2019/05/STSCI-H-p1917b-q-5198x4801_NASAimage_horizontalcrop.jpg");
+        background-image: url("https://insights.som.yale.edu/sites/default/files/styles/rectangle_xl/public/2022-10/space.webp?h=c39451b8&itok=lBBRALjx");
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
