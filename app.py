@@ -77,7 +77,7 @@ st.markdown(
         margin-bottom: -20 !important;
     }
     .stApp {
-        background-image: url("https://images.unsplash.com/photo-1518770660439-4636190af475");
+        background-image: url("https://www.ecowatch.com/wp-content/uploads/2021/10/1641264230-origin.jpg");
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
