@@ -77,7 +77,7 @@ st.markdown(
         margin-bottom: -20 !important;
     }
     .stApp {
-        background-image: url("https://scitechdaily.com/images/Matter-Universe-Concept-1536x1024.jpg");
+        background-image: url("https://today.uconn.edu/wp-content/uploads/2019/05/STSCI-H-p1917b-q-5198x4801_NASAimage_horizontalcrop.jpg");
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
