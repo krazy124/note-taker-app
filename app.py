@@ -779,7 +779,7 @@ with tab1:
                 "Instruction",
                 value=ex["instruction"],
                 key=f"instruction_{i}",
-                height=120
+                height=200
             )
 
             st.markdown('<div class="toggle-button-row"></div>', unsafe_allow_html=True)
