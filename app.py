@@ -76,6 +76,13 @@ st.markdown(
     .ace_editor {
         margin-bottom: -20 !important;
     }
+    .stApp {
+        background-image: url("https://images.unsplash.com/photo-1518770660439-4636190af475");
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+    }
     @media (max-width: 768px) {
         .block-container {
             padding-left: 0.7rem;
