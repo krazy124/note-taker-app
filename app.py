@@ -897,7 +897,6 @@ with tab1:
         if st.button("Compile Block", use_container_width=True):
             compile_block(section_name, concept)
 
-    st.markdown("---")
     st.subheader("Compiled Block Preview")
     st.code(st.session_state.compiled_block, language="python")
 
