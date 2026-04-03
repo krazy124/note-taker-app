@@ -881,7 +881,7 @@ with tab1:
                 language="python",
                 theme="monokai",
                 key=f"code_{i}",
-                height=260
+                height=180
             )
             ex["code"] = code_value if code_value else ""
 
