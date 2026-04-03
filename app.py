@@ -83,6 +83,10 @@ st.markdown(
         background-repeat: no-repeat;
         background-attachment: fixed;
     }
+    .custom-subheader {
+        color: #4CAF50; 
+        margin-bottom: 0.5rem;
+    }
     @media (max-width: 768px) {
         .block-container {
             padding-left: 0.7rem;
@@ -904,7 +908,10 @@ with tab1:
         if st.button("Compile Block", use_container_width=True):
             compile_block(section_name, concept)
 
-    st.subheader("Compiled Block Preview")
+    st.markdown(
+    '<h3 class="custom-subheader">Compiled Block Preview</h3>',
+    unsafe_allow_html=True
+)   
     st.code(st.session_state.compiled_block, language="python")
 
     if st.button("Save to Google Sheets", use_container_width=True):
