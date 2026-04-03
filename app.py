@@ -84,7 +84,7 @@ st.markdown(
         background-attachment: fixed;
     }
     .custom-subheader {
-        color: #4CAF50; 
+        color: #2878f0; 
         margin-bottom: 0.5rem;
     }
     @media (max-width: 768px) {
