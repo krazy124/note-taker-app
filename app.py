@@ -77,7 +77,7 @@ st.markdown(
         margin-bottom: -20 !important;
     }
     .stApp {
-        background-image: url("https://www.ecowatch.com/wp-content/uploads/2021/10/1641264230-origin.jpg");
+        background-image: url("https://assets.science.nasa.gov/dynamicimage/assets/science/missions/hubble/releases/2016/10/STScI-01EVT19027NB369FR81GYFQNX3.tif?w=900");
         background-size: cover;
         background-position: center;
         background-repeat: no-repeat;
