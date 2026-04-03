@@ -73,7 +73,9 @@ st.markdown(
         margin-top: 0.35rem;
         margin-bottom: 0.6rem;
     }
-
+    .ace_editor {
+        margin-bottom: 0 !important;
+    }
     @media (max-width: 768px) {
         .block-container {
             padding-left: 0.7rem;
