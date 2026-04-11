@@ -2,6 +2,8 @@ import io
 import csv
 import json
 import contextlib
+import sys
+import types
 from datetime import datetime
 
 import streamlit as st
@@ -14,7 +16,7 @@ st.set_page_config(page_title="Python Review Block Builder", layout="wide")
 
 
 # =========================
-# Custom Styling- Lets see if this saves tothe repository
+# Custom Styling
 # =========================
 st.markdown(
     """
@@ -164,11 +166,109 @@ def section_sort_key(section_id):
     return 999999
 
 
+def get_sheet_headers(worksheet):
+    return [str(value).strip() for value in worksheet.row_values(1) if str(value).strip()]
+
+
+def ensure_modules_json_string(modules):
+    return json.dumps(normalize_modules(modules), ensure_ascii=False)
+
+
+def get_default_modules():
+    return [{"name": "app.py", "code": ""}]
+
+
+def get_next_default_module_name(example):
+    existing_names = {
+        str(module.get("name", "")).strip().lower()
+        for module in example.get("modules", [])
+        if str(module.get("name", "")).strip()
+    }
+
+    index = 1
+    while True:
+        candidate = f"module{index}.py"
+        if candidate.lower() not in existing_names:
+            return candidate
+        index += 1
+
+
+def normalize_modules(raw_modules, fallback_code=""):
+    if isinstance(raw_modules, list):
+        modules = raw_modules
+    else:
+        modules = []
+
+        if isinstance(raw_modules, str) and raw_modules.strip():
+            try:
+                parsed = json.loads(raw_modules)
+                if isinstance(parsed, list):
+                    modules = parsed
+            except Exception:
+                modules = []
+
+    cleaned_modules = []
+
+    for module in modules:
+        if not isinstance(module, dict):
+            continue
+
+        name = str(module.get("name", "")).strip() or "module.py"
+        code = str(module.get("code", ""))
+        cleaned_modules.append({
+            "name": name,
+            "code": code,
+        })
+
+    if not cleaned_modules:
+        cleaned_modules = [{
+            "name": "app.py",
+            "code": str(fallback_code or "")
+        }]
+
+    app_index = next(
+        (idx for idx, module in enumerate(cleaned_modules)
+         if module["name"].strip().lower() == "app.py"),
+        None
+    )
+
+    if app_index is None:
+        cleaned_modules.insert(
+            0, {"name": "app.py", "code": str(fallback_code or "")})
+    elif app_index != 0:
+        app_module = cleaned_modules.pop(app_index)
+        cleaned_modules.insert(0, app_module)
+
+    return cleaned_modules
+
+
+def modules_to_text(modules):
+    rendered_parts = []
+
+    for module in normalize_modules(modules):
+        module_name = str(module.get("name", "")).strip() or "module.py"
+        module_code = str(module.get("code", "")).rstrip()
+
+        rendered_parts.append(f"# {module_name}")
+
+        if module_code:
+            rendered_parts.append(module_code)
+
+        rendered_parts.append("")
+
+    return "\n".join(rendered_parts).strip()
+
+
+def get_record_modules(record):
+    return normalize_modules(record.get("Modules", ""), fallback_code=record.get("Code", ""))
+
+
 def row_matches_search(record, search_text, search_mode):
     if not search_text.strip():
         return True
 
     search_value = search_text.strip().lower()
+    rendered_modules = modules_to_text(get_record_modules(record))
 
     searchable_fields = {
         "Section ID": clean_label_text(record.get("Section ID", "")),
@@ -177,7 +277,8 @@ def row_matches_search(record, search_text, search_mode):
         "Instruction": str(record.get("Instruction", "")).strip(),
         "Setup": str(record.get("Setup", "")).strip(),
         "Start Code": str(record.get("Start Code", "")).strip(),
-        "Code": str(record.get("Code", "")).strip(),
+        "Code": rendered_modules,
+        "Modules": rendered_modules,
         "Mock Input": str(record.get("Mock Input", "")).strip(),
         "Result": str(record.get("Result", "")).strip(),
         "Notes": str(record.get("Notes", "")).strip(),
@@ -276,6 +377,79 @@ def append_commented_block(lines, label, text):
                 lines.append("#")
 
 
+def build_example_modules_from_editor(example):
+    return normalize_modules(example.get("modules", []))
+
+
+def build_sheet_row_from_record(record, headers):
+    row_values = []
+
+    for header in headers:
+        if header == "Code":
+            row_values.append("")
+        else:
+            row_values.append(record.get(header, ""))
+
+    return row_values
+
+
+def execute_example_modules(example):
+    modules = build_example_modules_from_editor(example)
+    stdout_buffer = io.StringIO()
+    registered_module_names = []
+    mock_input_function = build_mock_input_function(
+        example.get("mock_input", ""))
+
+    try:
+        for module in modules:
+            module_name = str(module.get("name", "")).strip()
+            if not module_name:
+                raise RuntimeError("Every module needs a file name.")
+            if not module_name.endswith(".py"):
+                raise RuntimeError(
+                    f"Module '{module_name}' must end with .py.")
+
+        app_module = next(
+            (module for module in modules if module["name"].strip(
+            ).lower() == "app.py"),
+            None
+        )
+
+        if app_module is None:
+            raise RuntimeError("Each example must include app.py.")
+
+        supporting_modules = [
+            module for module in modules if module["name"].strip().lower() != "app.py"]
+
+        for module in supporting_modules:
+            module_name = module["name"].strip()[:-3]
+            in_memory_module = types.ModuleType(module_name)
+            in_memory_module.__dict__["__name__"] = module_name
+            in_memory_module.__dict__["input"] = mock_input_function
+            sys.modules[module_name] = in_memory_module
+            registered_module_names.append(module_name)
+
+        for module in supporting_modules:
+            module_name = module["name"].strip()[:-3]
+            module_code = str(module.get("code", ""))
+            exec(module_code, sys.modules[module_name].__dict__)
+
+        runtime_env = {
+            "__name__": "__main__",
+            "input": mock_input_function,
+        }
+
+        with contextlib.redirect_stdout(stdout_buffer):
+            exec(str(app_module.get("code", "")), runtime_env)
+
+        result = stdout_buffer.getvalue().strip()
+        return result if result else "No result"
+
+    finally:
+        for module_name in registered_module_names:
+            sys.modules.pop(module_name, None)
+
+
 # =========================
 # Build Review Viewer Text
 # =========================
@@ -294,7 +468,7 @@ def build_review_view_text(
     for index, row in enumerate(section_rows):
         setup_text = normalize_multiline_text(row.get("Setup", ""))
         start_code_text = normalize_multiline_text(row.get("Start Code", ""))
-        code_text = normalize_multiline_text(row.get("Code", ""))
+        rendered_code_text = modules_to_text(get_record_modules(row))
         mock_input_text = normalize_multiline_text(row.get("Mock Input", ""))
         instruction = normalize_multiline_text(row.get("Instruction", ""))
         notes = normalize_multiline_text(row.get("Notes", ""))
@@ -316,8 +490,8 @@ def build_review_view_text(
             lines.append(start_code_text)
             lines.append("")
 
-        if show_code and code_text:
-            lines.append(code_text)
+        if show_code and rendered_code_text:
+            lines.append(rendered_code_text)
 
         if show_mock_input and mock_input_text:
             lines.append("# Mock Input:")
@@ -348,8 +522,8 @@ def create_blank_example():
         "instruction": "",
         "notes": "",
         "start_code": "",
-        "code": "",
         "mock_input": "",
+        "modules": get_default_modules(),
         "show_setup": False,
         "show_notes": False,
         "show_start_code": False,
@@ -377,6 +551,31 @@ def add_example():
     st.session_state.examples.append(create_blank_example())
 
 
+def add_module(example_index):
+    example = st.session_state.examples[example_index]
+    example.setdefault("modules", get_default_modules())
+    example["modules"].append({
+        "name": get_next_default_module_name(example),
+        "code": "",
+    })
+
+
+def remove_module(example_index, module_index):
+    example = st.session_state.examples[example_index]
+    modules = example.get("modules", [])
+
+    if module_index < 0 or module_index >= len(modules):
+        return
+
+    if str(modules[module_index].get("name", "")).strip().lower() == "app.py":
+        return
+
+    modules.pop(module_index)
+
+    if not modules:
+        example["modules"] = get_default_modules()
+
+
 def toggle_example_field(example_index, field_name):
     current_value = st.session_state.examples[example_index].get(
         field_name, False)
@@ -391,18 +590,13 @@ def compile_block(section_name, concept):
     example_rows = []
 
     for i, ex in enumerate(st.session_state.examples, start=1):
-        stdout_buffer = io.StringIO()
         result = ""
         current_setup = normalize_multiline_text(ex["setup"])
         current_instruction = normalize_multiline_text(ex["instruction"])
         current_notes = normalize_multiline_text(ex["notes"])
         current_start_code = normalize_multiline_text(ex["start_code"])
-        current_code = normalize_multiline_text(ex["code"])
         current_mock_input = normalize_multiline_text(ex["mock_input"])
-
-        runtime_env = {
-            "input": build_mock_input_function(ex["mock_input"])
-        }
+        current_modules = build_example_modules_from_editor(ex)
 
         if current_setup:
             block_lines.append("# Setup:")
@@ -411,7 +605,11 @@ def compile_block(section_name, concept):
 
         try:
             if current_setup:
-                exec(current_setup, runtime_env)
+                setup_env = {
+                    "__name__": "__main__",
+                    "input": build_mock_input_function(ex["mock_input"])
+                }
+                exec(current_setup, setup_env)
         except Exception as e:
             result = f"Setup Error: {e}"
 
@@ -429,19 +627,14 @@ def compile_block(section_name, concept):
 
         if not result:
             try:
-                with contextlib.redirect_stdout(stdout_buffer):
-                    exec(current_code, runtime_env)
-
-                result = stdout_buffer.getvalue().strip()
-
-                if result == "":
-                    result = "No result"
-
+                result = execute_example_modules(ex)
             except Exception as e:
                 result = f"Code Error: {e}"
 
-        if current_code:
-            block_lines.append(current_code)
+        rendered_module_text = modules_to_text(current_modules)
+
+        if rendered_module_text:
+            block_lines.append(rendered_module_text)
 
         if current_mock_input:
             block_lines.append("# Mock Input:")
@@ -454,18 +647,19 @@ def compile_block(section_name, concept):
 
         block_lines.append("")
 
-        example_rows.append([
-            i,                    # Section Order
-            section_name,         # Topic
-            concept,              # Concept
-            ex["instruction"],    # Instruction
-            current_setup,        # Setup
-            current_start_code,   # Start Code
-            current_code,         # Code
-            current_mock_input,   # Mock Input
-            result,               # Result
-            ex["notes"]           # Notes
-        ])
+        example_rows.append({
+            "Section Order": i,
+            "Topic": section_name,
+            "Concept": concept,
+            "Instruction": ex["instruction"],
+            "Setup": current_setup,
+            "Start Code": current_start_code,
+            "Code": "",
+            "Modules": ensure_modules_json_string(current_modules),
+            "Mock Input": current_mock_input,
+            "Result": result,
+            "Notes": ex["notes"],
+        })
 
     st.session_state.compiled_block = "\n".join(block_lines).strip()
     st.session_state.example_rows = example_rows
@@ -476,6 +670,14 @@ def compile_block(section_name, concept):
 # =========================
 def save_block_and_examples(section_name, concept):
     example_sheet = connect_to_example_sheet()
+    headers = get_sheet_headers(example_sheet)
+
+    if not headers:
+        raise RuntimeError("The Example View sheet needs a header row.")
+
+    if "Modules" not in headers:
+        raise RuntimeError(
+            'Add a "Modules" column to the Example View sheet before saving multi-module examples.')
 
     section_id = get_next_section_id()
     created_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -484,29 +686,32 @@ def save_block_and_examples(section_name, concept):
         rows_to_save = []
 
         for ex_row in st.session_state.example_rows:
-            rows_to_save.append([
-                section_id,
-                ex_row[0],   # Section Order
-                ex_row[1],   # Topic
-                ex_row[2],   # Concept
-                ex_row[3],   # Instruction
-                ex_row[4],   # Setup
-                ex_row[5],   # Start Code
-                ex_row[6],   # Code
-                ex_row[7],   # Mock Input
-                ex_row[8],   # Result
-                ex_row[9],   # Notes
-                created_at,  # Created At
-            ])
+            record = {
+                "Section ID": section_id,
+                "Section Order": ex_row["Section Order"],
+                "Topic": ex_row["Topic"],
+                "Concept": ex_row["Concept"],
+                "Instruction": ex_row["Instruction"],
+                "Setup": ex_row["Setup"],
+                "Start Code": ex_row["Start Code"],
+                "Code": "",
+                "Modules": ex_row["Modules"],
+                "Mock Input": ex_row["Mock Input"],
+                "Result": ex_row["Result"],
+                "Notes": ex_row["Notes"],
+                "Created At": created_at,
+            }
+            rows_to_save.append(build_sheet_row_from_record(record, headers))
 
         example_sheet.append_rows(rows_to_save)
 
     return section_id
 
-
 # =========================
 # Separate Existing Block Content
 # =========================
+
+
 def parse_comment_block(lines, start_index, label):
     current_line = lines[start_index].strip()
     prefix = f"# {label}:"
@@ -560,10 +765,23 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
             "instruction": "",
             "notes": "",
             "start_code_lines": [],
-            "code_lines": [],
+            "modules": [],
+            "active_module_index": None,
             "mock_input_lines": [],
             "result": "",
         }
+
+    def ensure_app_module(example):
+        if not example["modules"]:
+            example["modules"].append({"name": "app.py", "code_lines": []})
+            example["active_module_index"] = 0
+
+    def start_module(example, module_name):
+        example["modules"].append({
+            "name": module_name,
+            "code_lines": []
+        })
+        example["active_module_index"] = len(example["modules"]) - 1
 
     def finalize_example():
         if current_example is None:
@@ -571,16 +789,25 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
 
         start_code_only = "\n".join(
             current_example["start_code_lines"]).rstrip()
-        code_only = "\n".join(current_example["code_lines"]).rstrip()
         mock_input_only = "\n".join(
             current_example["mock_input_lines"]).rstrip()
+
+        finalized_modules = [
+            {
+                "name": module["name"],
+                "code": "\n".join(module["code_lines"]).rstrip()
+            }
+            for module in current_example["modules"]
+        ]
+
+        finalized_modules = normalize_modules(finalized_modules)
 
         has_content = (
             current_example["setup"].strip()
             or current_example["instruction"].strip()
             or current_example["notes"].strip()
             or start_code_only.strip()
-            or code_only.strip()
+            or any(str(module.get("code", "")).strip() for module in finalized_modules)
             or mock_input_only.strip()
             or current_example["result"].strip()
         )
@@ -596,7 +823,8 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
             current_example["instruction"].strip(),
             current_example["setup"].strip(),
             start_code_only.strip(),
-            code_only.strip(),
+            "",
+            ensure_modules_json_string(finalized_modules),
             mock_input_only.strip(),
             current_example["result"].strip(),
             current_example["notes"].strip(),
@@ -620,6 +848,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
                     or next_stripped.startswith("# Instruction:")
                     or next_stripped.startswith("# Notes:")
                     or next_stripped.startswith("# Result:")
+                    or (next_stripped.startswith("# ") and next_stripped.lower().endswith(".py"))
                 ):
                     break
 
@@ -664,6 +893,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
                     or next_stripped.startswith("# Instruction:")
                     or next_stripped.startswith("# Notes:")
                     or next_stripped.startswith("# Result:")
+                    or (next_stripped.startswith("# ") and next_stripped.lower().endswith(".py"))
                 ):
                     break
 
@@ -671,6 +901,14 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
                 i += 1
 
             current_example["start_code_lines"] = start_code_lines
+            continue
+
+        if stripped.startswith("# ") and stripped.lower().endswith(".py"):
+            if current_example is None:
+                current_example = new_example()
+
+            start_module(current_example, stripped[2:].strip())
+            i += 1
             continue
 
         if stripped == "# Mock Input:":
@@ -695,6 +933,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
                     or next_stripped.startswith("# Instruction:")
                     or next_stripped.startswith("# Notes:")
                     or next_stripped.startswith("# Result:")
+                    or (next_stripped.startswith("# ") and next_stripped.lower().endswith(".py"))
                 ):
                     break
 
@@ -735,6 +974,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
                     or next_stripped.startswith("# Instruction:")
                     or next_stripped.startswith("# Notes:")
                     or next_stripped.startswith("# Result:")
+                    or (next_stripped.startswith("# ") and next_stripped.lower().endswith(".py"))
                 ):
                     break
 
@@ -749,7 +989,15 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
             continue
 
         if current_example is not None:
-            current_example["code_lines"].append(line)
+            ensure_app_module(current_example)
+            active_module_index = current_example.get("active_module_index")
+
+            if active_module_index is None:
+                current_example["active_module_index"] = 0
+                active_module_index = 0
+
+            current_example["modules"][active_module_index]["code_lines"].append(
+                line)
 
         i += 1
 
@@ -899,16 +1147,45 @@ with tab1:
                     height=140
                 )
 
-            st.markdown('<div class="ace-label">Code</div>',
+            st.markdown('<div class="ace-label">Modules</div>',
                         unsafe_allow_html=True)
-            code_value = st_ace(
-                value=ex["code"],
-                language="python",
-                theme="monokai",
-                key=f"code_{i}",
-                height=260
-            )
-            ex["code"] = code_value if code_value else ""
+
+            ex["modules"] = build_example_modules_from_editor(ex)
+
+            for module_index, module in enumerate(ex["modules"]):
+                with st.container(border=True):
+                    module_col1, module_col2 = st.columns([4, 1])
+
+                    with module_col1:
+                        module_name = st.text_input(
+                            "Module Name",
+                            value=module.get("name", ""),
+                            key=f"module_name_{i}_{module_index}"
+                        )
+                        ex["modules"][module_index]["name"] = module_name if module_name else ""
+
+                    with module_col2:
+                        if module_index == 0:
+                            st.markdown("###")
+                            st.caption("Required")
+                        else:
+                            st.markdown("###")
+                            if st.button("Remove Module", key=f"remove_module_{i}_{module_index}", use_container_width=True):
+                                remove_module(i, module_index)
+                                st.rerun()
+
+                    module_code_value = st_ace(
+                        value=module.get("code", ""),
+                        language="python",
+                        theme="monokai",
+                        key=f"module_code_{i}_{module_index}",
+                        height=260
+                    )
+                    ex["modules"][module_index]["code"] = module_code_value if module_code_value else ""
+
+            if st.button("Add Module", key=f"add_module_{i}", use_container_width=True):
+                add_module(i)
+                st.rerun()
 
     action_col1, action_col2 = st.columns([1, 1])
 
@@ -938,6 +1215,8 @@ with tab1:
 
 with tab2:
     st.subheader("Separate Existing Block Content")
+    st.caption(
+        "For multi-module examples, module files should be formatted like # app.py, # helpers.py, etc.")
 
     info_col1, info_col2 = st.columns(2)
 
@@ -1046,6 +1325,7 @@ with tab3:
                     "Setup",
                     "Start Code",
                     "Code",
+                    "Modules",
                     "Mock Input",
                     "Result",
                     "Notes",
