@@ -243,6 +243,27 @@ def normalize_modules(raw_modules, fallback_code=""):
     return cleaned_modules
 
 
+def split_app_and_supporting_modules(modules):
+    normalized_modules = normalize_modules(modules)
+
+    app_code = ""
+    supporting_modules = []
+
+    for module in normalized_modules:
+        module_name = str(module.get("name", "")).strip() or "module.py"
+        module_code = str(module.get("code", ""))
+
+        if module_name.lower() == "app.py":
+            app_code = module_code
+        else:
+            supporting_modules.append({
+                "name": module_name,
+                "code": module_code,
+            })
+
+    return app_code, supporting_modules
+
+
 def modules_to_text(modules):
     rendered_parts = []
 
