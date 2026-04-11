@@ -171,7 +171,8 @@ def get_sheet_headers(worksheet):
 
 
 def ensure_modules_json_string(modules):
-    return json.dumps(normalize_modules(modules), ensure_ascii=False)
+    _, supporting_modules = split_app_and_supporting_modules(modules)
+    return json.dumps(supporting_modules, ensure_ascii=False)
 
 
 def get_default_modules():
@@ -385,10 +386,7 @@ def build_sheet_row_from_record(record, headers):
     row_values = []
 
     for header in headers:
-        if header == "Code":
-            row_values.append("")
-        else:
-            row_values.append(record.get(header, ""))
+        row_values.append(record.get(header, ""))
 
     return row_values
 
@@ -597,6 +595,8 @@ def compile_block(section_name, concept):
         current_start_code = normalize_multiline_text(ex["start_code"])
         current_mock_input = normalize_multiline_text(ex["mock_input"])
         current_modules = build_example_modules_from_editor(ex)
+        current_app_code, current_supporting_modules = split_app_and_supporting_modules(
+            current_modules)
 
         if current_setup:
             block_lines.append("# Setup:")
@@ -654,8 +654,8 @@ def compile_block(section_name, concept):
             "Instruction": ex["instruction"],
             "Setup": current_setup,
             "Start Code": current_start_code,
-            "Code": "",
-            "Modules": ensure_modules_json_string(current_modules),
+            "Code": current_app_code,
+            "Modules": json.dumps(current_supporting_modules, ensure_ascii=False),
             "Mock Input": current_mock_input,
             "Result": result,
             "Notes": ex["notes"],
@@ -694,7 +694,7 @@ def save_block_and_examples(section_name, concept):
                 "Instruction": ex_row["Instruction"],
                 "Setup": ex_row["Setup"],
                 "Start Code": ex_row["Start Code"],
-                "Code": "",
+                "Code": ex_row["Code"],
                 "Modules": ex_row["Modules"],
                 "Mock Input": ex_row["Mock Input"],
                 "Result": ex_row["Result"],
@@ -815,6 +815,9 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
         if not has_content:
             return
 
+        app_code, supporting_modules = split_app_and_supporting_modules(
+            finalized_modules)
+
         rows.append([
             str(section_id).strip(),
             len(rows) + 1,
@@ -823,8 +826,8 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
             current_example["instruction"].strip(),
             current_example["setup"].strip(),
             start_code_only.strip(),
-            "",
-            ensure_modules_json_string(finalized_modules),
+            app_code.strip(),
+            json.dumps(supporting_modules, ensure_ascii=False),
             mock_input_only.strip(),
             current_example["result"].strip(),
             current_example["notes"].strip(),
