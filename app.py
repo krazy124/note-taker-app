@@ -297,7 +297,6 @@ def row_matches_search(record, search_text, search_mode):
         "Topic": clean_label_text(record.get("Topic", "")),
         "Concept": clean_label_text(record.get("Concept", "")),
         "Instruction": str(record.get("Instruction", "")).strip(),
-        "Setup": str(record.get("Setup", "")).strip(),
         "Start Code": str(record.get("Start Code", "")).strip(),
         "Code": rendered_modules,
         "Modules": rendered_modules,
@@ -474,7 +473,6 @@ def execute_example_modules(example):
 # =========================
 def build_review_view_text(
     section_rows,
-    show_setup,
     show_instruction,
     show_notes,
     show_start_code,
@@ -485,18 +483,12 @@ def build_review_view_text(
     lines = []
 
     for index, row in enumerate(section_rows):
-        setup_text = normalize_multiline_text(row.get("Setup", ""))
         start_code_text = normalize_multiline_text(row.get("Start Code", ""))
         rendered_code_text = modules_to_text(get_record_modules(row))
         mock_input_text = normalize_multiline_text(row.get("Mock Input", ""))
         instruction = normalize_multiline_text(row.get("Instruction", ""))
         notes = normalize_multiline_text(row.get("Notes", ""))
         result = normalize_multiline_text(row.get("Result", ""))
-
-        if show_setup and setup_text:
-            lines.append("# Setup:")
-            lines.append(setup_text)
-            lines.append("")
 
         if show_instruction and instruction:
             append_commented_block(lines, "Instruction", instruction)
@@ -537,13 +529,11 @@ def build_review_view_text(
 # =========================
 def create_blank_example():
     return {
-        "setup": "",
         "instruction": "",
         "notes": "",
         "start_code": "",
         "mock_input": "",
         "modules": get_default_modules(),
-        "show_setup": False,
         "show_notes": False,
         "show_start_code": False,
         "show_mock_input": False,
@@ -610,7 +600,6 @@ def compile_block(section_name, concept):
 
     for i, ex in enumerate(st.session_state.examples, start=1):
         result = ""
-        current_setup = normalize_multiline_text(ex["setup"])
         current_instruction = normalize_multiline_text(ex["instruction"])
         current_notes = normalize_multiline_text(ex["notes"])
         current_start_code = normalize_multiline_text(ex["start_code"])
@@ -618,21 +607,6 @@ def compile_block(section_name, concept):
         current_modules = build_example_modules_from_editor(ex)
         current_app_code, current_supporting_modules = split_app_and_supporting_modules(
             current_modules)
-
-        if current_setup:
-            block_lines.append("# Setup:")
-            block_lines.append(current_setup)
-            block_lines.append("")
-
-        try:
-            if current_setup:
-                setup_env = {
-                    "__name__": "__main__",
-                    "input": build_mock_input_function(ex["mock_input"])
-                }
-                exec(current_setup, setup_env)
-        except Exception as e:
-            result = f"Setup Error: {e}"
 
         if current_instruction:
             append_commented_block(
@@ -673,7 +647,6 @@ def compile_block(section_name, concept):
             "Topic": section_name,
             "Concept": concept,
             "Instruction": ex["instruction"],
-            "Setup": current_setup,
             "Start Code": current_start_code,
             "Code": current_app_code,
             "Modules": json.dumps(current_supporting_modules, ensure_ascii=False),
@@ -713,7 +686,6 @@ def save_block_and_examples(section_name, concept):
                 "Topic": ex_row["Topic"],
                 "Concept": ex_row["Concept"],
                 "Instruction": ex_row["Instruction"],
-                "Setup": ex_row["Setup"],
                 "Start Code": ex_row["Start Code"],
                 "Code": ex_row["Code"],
                 "Modules": ex_row["Modules"],
@@ -749,8 +721,7 @@ def parse_comment_block(lines, start_index, label):
         next_stripped = next_line.strip()
 
         if (
-            next_stripped == "# Setup:"
-            or next_stripped == "# Start Code:"
+            next_stripped == "# Start Code:"
             or next_stripped == "# Mock Input:"
             or next_stripped.startswith("# Instruction:")
             or next_stripped.startswith("# Notes:")
@@ -776,13 +747,11 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
     topic = str(topic).strip().strip('"')
     concept = str(concept).strip().strip('"')
 
-    active_setup = ""
     current_example = None
     i = 0
 
     def new_example():
         return {
-            "setup": active_setup,
             "instruction": "",
             "notes": "",
             "start_code_lines": [],
@@ -824,8 +793,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
         finalized_modules = normalize_modules(finalized_modules)
 
         has_content = (
-            current_example["setup"].strip()
-            or current_example["instruction"].strip()
+            current_example["instruction"].strip()
             or current_example["notes"].strip()
             or start_code_only.strip()
             or any(str(module.get("code", "")).strip() for module in finalized_modules)
@@ -845,7 +813,6 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
             topic,
             concept,
             current_example["instruction"].strip(),
-            current_example["setup"].strip(),
             start_code_only.strip(),
             app_code.strip(),
             json.dumps(supporting_modules, ensure_ascii=False),
@@ -857,30 +824,6 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
     while i < len(lines):
         line = lines[i]
         stripped = line.strip()
-
-        if stripped == "# Setup:":
-            i += 1
-            setup_lines = []
-
-            while i < len(lines):
-                next_stripped = lines[i].strip()
-
-                if (
-                    next_stripped == "# Setup:"
-                    or next_stripped == "# Start Code:"
-                    or next_stripped == "# Mock Input:"
-                    or next_stripped.startswith("# Instruction:")
-                    or next_stripped.startswith("# Notes:")
-                    or next_stripped.startswith("# Result:")
-                    or (next_stripped.startswith("# ") and next_stripped.lower().endswith(".py"))
-                ):
-                    break
-
-                setup_lines.append(lines[i])
-                i += 1
-
-            active_setup = "\n".join(setup_lines).strip()
-            continue
 
         if stripped.startswith("# Instruction:"):
             finalize_example()
@@ -911,8 +854,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
                 next_stripped = lines[i].strip()
 
                 if (
-                    next_stripped == "# Setup:"
-                    or next_stripped == "# Start Code:"
+                    next_stripped == "# Start Code:"
                     or next_stripped == "# Mock Input:"
                     or next_stripped.startswith("# Instruction:")
                     or next_stripped.startswith("# Notes:")
@@ -951,8 +893,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
                     continue
 
                 if (
-                    next_stripped == "# Setup:"
-                    or next_stripped == "# Start Code:"
+                    next_stripped == "# Start Code:"
                     or next_stripped == "# Mock Input:"
                     or next_stripped.startswith("# Instruction:")
                     or next_stripped.startswith("# Notes:")
@@ -992,8 +933,7 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
                     continue
 
                 if (
-                    next_stripped == "# Setup:"
-                    or next_stripped == "# Start Code:"
+                    next_stripped == "# Start Code:"
                     or next_stripped == "# Mock Input:"
                     or next_stripped.startswith("# Instruction:")
                     or next_stripped.startswith("# Notes:")
@@ -1078,32 +1018,25 @@ with tab1:
             st.markdown('<div class="toggle-button-row"></div>',
                         unsafe_allow_html=True)
 
-            button_col1, button_col2, button_col3, button_col4 = st.columns(4)
+            button_col1, button_col2, button_col3 = st.columns(3)
 
-            setup_button_label = "Hide Setup" if ex["show_setup"] else "Show Setup"
             notes_button_label = "Hide Notes" if ex["show_notes"] else "Show Notes"
             start_code_button_label = "Hide Start Code" if ex["show_start_code"] else "Show Start Code"
             mock_input_button_label = "Hide Mock Input" if ex["show_mock_input"] else "Show Mock Input"
 
             with button_col1:
-                if st.button(setup_button_label, key=f"toggle_setup_{i}", use_container_width=True):
-                    toggle_example_field(i, "show_setup")
-
-            with button_col2:
                 if st.button(notes_button_label, key=f"toggle_notes_{i}", use_container_width=True):
                     toggle_example_field(i, "show_notes")
 
-            with button_col3:
+            with button_col2:
                 if st.button(start_code_button_label, key=f"toggle_start_code_{i}", use_container_width=True):
                     toggle_example_field(i, "show_start_code")
 
-            with button_col4:
+            with button_col3:
                 if st.button(mock_input_button_label, key=f"toggle_mock_input_{i}", use_container_width=True):
                     toggle_example_field(i, "show_mock_input")
 
             visible_top_fields = []
-            if ex["show_setup"]:
-                visible_top_fields.append("setup")
             if ex["show_notes"]:
                 visible_top_fields.append("notes")
             if ex["show_mock_input"]:
@@ -1112,14 +1045,7 @@ with tab1:
             if len(visible_top_fields) == 1:
                 field_name = visible_top_fields[0]
 
-                if field_name == "setup":
-                    ex["setup"] = st.text_area(
-                        "Setup",
-                        value=ex["setup"],
-                        key=f"setup_{i}",
-                        height=140
-                    )
-                elif field_name == "notes":
+                if field_name == "notes":
                     ex["notes"] = st.text_area(
                         "Notes",
                         value=ex["notes"],
@@ -1140,14 +1066,7 @@ with tab1:
 
                 for idx, field_name in enumerate(visible_top_fields):
                     with cols[idx % 2]:
-                        if field_name == "setup":
-                            ex["setup"] = st.text_area(
-                                "Setup",
-                                value=ex["setup"],
-                                key=f"setup_{i}",
-                                height=140
-                            )
-                        elif field_name == "notes":
+                        if field_name == "notes":
                             ex["notes"] = st.text_area(
                                 "Notes",
                                 value=ex["notes"],
@@ -1346,7 +1265,6 @@ with tab3:
                     "Topic",
                     "Concept",
                     "Instruction",
-                    "Setup",
                     "Start Code",
                     "Code",
                     "Modules",
@@ -1373,7 +1291,6 @@ with tab3:
                 selected_section_id = "All Sections"
 
             show_headers = st.checkbox("Headers", value=True)
-            show_setup = st.checkbox("Setup", value=True)
             show_instruction = st.checkbox("Instruction", value=True)
             show_notes = st.checkbox("Notes", value=True)
             show_start_code = st.checkbox("Start Code", value=True)
@@ -1411,7 +1328,6 @@ with tab3:
 
                     section_text = build_review_view_text(
                         section_rows=rows,
-                        show_setup=show_setup,
                         show_instruction=show_instruction,
                         show_notes=show_notes,
                         show_start_code=show_start_code,
@@ -1438,7 +1354,6 @@ with tab3:
 
                 section_text = build_review_view_text(
                     section_rows=rows,
-                    show_setup=show_setup,
                     show_instruction=show_instruction,
                     show_notes=show_notes,
                     show_start_code=show_start_code,
