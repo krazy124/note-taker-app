@@ -14,7 +14,7 @@ st.set_page_config(page_title="Python Review Block Builder", layout="wide")
 
 
 # =========================
-# Custom Styling
+# Custom Styling- Lets see if this saves tothe repository
 # =========================
 st.markdown(
     """
@@ -115,7 +115,8 @@ def connect_to_spreadsheet():
     )
 
     client = gspread.authorize(creds)
-    spreadsheet = client.open_by_key("14pnlZ5jfXNC-AGrSsRQAmUQ17Acbn5xxDZQMsAlJQlo")
+    spreadsheet = client.open_by_key(
+        "14pnlZ5jfXNC-AGrSsRQAmUQ17Acbn5xxDZQMsAlJQlo")
     return spreadsheet
 
 
@@ -234,7 +235,8 @@ def build_mock_input_function(mock_input_text):
 
     if not normalized.strip():
         def no_mock_input(prompt=""):
-            raise RuntimeError("This example uses input(), but no Mock Input was provided.")
+            raise RuntimeError(
+                "This example uses input(), but no Mock Input was provided.")
         return no_mock_input
 
     provided_inputs = normalized.split("\n")
@@ -242,7 +244,8 @@ def build_mock_input_function(mock_input_text):
 
     def mock_input(prompt=""):
         if input_index["value"] >= len(provided_inputs):
-            raise RuntimeError("This example requested more input() values than were provided in Mock Input.")
+            raise RuntimeError(
+                "This example requested more input() values than were provided in Mock Input.")
         value = provided_inputs[input_index["value"]]
         input_index["value"] += 1
         return value
@@ -375,7 +378,8 @@ def add_example():
 
 
 def toggle_example_field(example_index, field_name):
-    current_value = st.session_state.examples[example_index].get(field_name, False)
+    current_value = st.session_state.examples[example_index].get(
+        field_name, False)
     st.session_state.examples[example_index][field_name] = not current_value
 
 
@@ -412,7 +416,8 @@ def compile_block(section_name, concept):
             result = f"Setup Error: {e}"
 
         if current_instruction:
-            append_commented_block(block_lines, "Instruction", current_instruction)
+            append_commented_block(
+                block_lines, "Instruction", current_instruction)
 
         if current_notes:
             append_commented_block(block_lines, "Notes", current_notes)
@@ -564,9 +569,11 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
         if current_example is None:
             return
 
-        start_code_only = "\n".join(current_example["start_code_lines"]).rstrip()
+        start_code_only = "\n".join(
+            current_example["start_code_lines"]).rstrip()
         code_only = "\n".join(current_example["code_lines"]).rstrip()
-        mock_input_only = "\n".join(current_example["mock_input_lines"]).rstrip()
+        mock_input_only = "\n".join(
+            current_example["mock_input_lines"]).rstrip()
 
         has_content = (
             current_example["setup"].strip()
@@ -625,7 +632,8 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
         if stripped.startswith("# Instruction:"):
             finalize_example()
             current_example = new_example()
-            instruction_text, next_index = parse_comment_block(lines, i, "Instruction")
+            instruction_text, next_index = parse_comment_block(
+                lines, i, "Instruction")
             current_example["instruction"] = instruction_text
             i = next_index
             continue
@@ -751,7 +759,8 @@ def parse_block_content_to_rows(section_id, topic, concept, block_text):
 
 def rows_to_tsv(rows):
     buffer = io.StringIO()
-    writer = csv.writer(buffer, delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_MINIMAL)
+    writer = csv.writer(buffer, delimiter="\t",
+                        lineterminator="\n", quoting=csv.QUOTE_MINIMAL)
 
     for row in rows:
         writer.writerow(row)
@@ -764,7 +773,8 @@ def rows_to_tsv(rows):
 # =========================
 st.title("Python Review Block Builder")
 
-tab1, tab2, tab3 = st.tabs(["Build Review Block", "Separate Existing Block", "Review Viewer"])
+tab1, tab2, tab3 = st.tabs(
+    ["Build Review Block", "Separate Existing Block", "Review Viewer"])
 
 
 with tab1:
@@ -793,7 +803,8 @@ with tab1:
                 height=200
             )
 
-            st.markdown('<div class="toggle-button-row"></div>', unsafe_allow_html=True)
+            st.markdown('<div class="toggle-button-row"></div>',
+                        unsafe_allow_html=True)
 
             button_col1, button_col2, button_col3, button_col4 = st.columns(4)
 
@@ -888,7 +899,8 @@ with tab1:
                     height=140
                 )
 
-            st.markdown('<div class="ace-label">Code</div>', unsafe_allow_html=True)
+            st.markdown('<div class="ace-label">Code</div>',
+                        unsafe_allow_html=True)
             code_value = st_ace(
                 value=ex["code"],
                 language="python",
@@ -898,20 +910,20 @@ with tab1:
             )
             ex["code"] = code_value if code_value else ""
 
-
     action_col1, action_col2 = st.columns([1, 1])
 
     with action_col1:
-        st.button("Insert Another Example", on_click=add_example, use_container_width=True)
+        st.button("Insert Another Example",
+                  on_click=add_example, use_container_width=True)
 
     with action_col2:
         if st.button("Compile Block", use_container_width=True):
             compile_block(section_name, concept)
 
     st.markdown(
-    '<h3 class="custom-subheader">Compiled Block Preview</h3>',
-    unsafe_allow_html=True
-)   
+        '<h3 class="custom-subheader">Compiled Block Preview</h3>',
+        unsafe_allow_html=True
+    )
     st.code(st.session_state.compiled_block, language="python")
 
     if st.button("Save to Google Sheets", use_container_width=True):
@@ -930,7 +942,8 @@ with tab2:
     info_col1, info_col2 = st.columns(2)
 
     with info_col1:
-        separate_section_id = st.text_input("Section ID", key="separate_section_id")
+        separate_section_id = st.text_input(
+            "Section ID", key="separate_section_id")
         separate_topic = st.text_input("Topic", key="separate_topic")
 
     with info_col2:
@@ -1072,7 +1085,8 @@ with tab3:
                 st.caption(f"Total Sections: {len(section_ids)}")
             else:
                 selected_group = grouped_sections[selected_section_id]
-                st.markdown(f"### {selected_group['topic']} - {selected_group['concept']}")
+                st.markdown(
+                    f"### {selected_group['topic']} - {selected_group['concept']}")
                 st.caption(f"Section ID: {selected_section_id}")
 
             combined_lines = []
@@ -1082,11 +1096,13 @@ with tab3:
                     group = grouped_sections[sid]
                     rows = get_sorted_section_rows(group["rows"])
 
-                    combined_lines.append("__________________________________________________")
+                    combined_lines.append(
+                        "__________________________________________________")
                     combined_lines.append("")
 
                     if show_headers:
-                        combined_lines.append(f"# ===== {sid} | {group['topic']} - {group['concept']} =====")
+                        combined_lines.append(
+                            f"# ===== {sid} | {group['topic']} - {group['concept']} =====")
                         combined_lines.append("")
 
                     section_text = build_review_view_text(
@@ -1107,11 +1123,13 @@ with tab3:
                 group = grouped_sections[selected_section_id]
                 rows = get_sorted_section_rows(group["rows"])
 
-                combined_lines.append("__________________________________________________")
+                combined_lines.append(
+                    "__________________________________________________")
                 combined_lines.append("")
 
                 if show_headers:
-                    combined_lines.append(f"# ===== {selected_section_id} | {group['topic']} - {group['concept']} =====")
+                    combined_lines.append(
+                        f"# ===== {selected_section_id} | {group['topic']} - {group['concept']} =====")
                     combined_lines.append("")
 
                 section_text = build_review_view_text(
